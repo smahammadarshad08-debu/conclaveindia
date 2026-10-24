@@ -20,6 +20,9 @@
 
   <!-- Top accessibility & demo bar (Desktop & Mobile) -->
   <aside class="sidebar" id="sidebar" aria-label="AccessMap control panel">
+    <div class="bottom-sheet-handle" id="bottom-sheet-handle" role="button" tabindex="0" aria-label="Expand or collapse bottom journey controls" title="Tap to expand or collapse bottom sheet">
+      <span class="handle-bar"></span>
+    </div>
     <header class="sidebar-header">
       <a class="brand" href="#" aria-label="AccessMap Home">
         <span class="brand-mark" aria-hidden="true">
@@ -28,6 +31,7 @@
         <span class="brand-text">access<span>map</span> <small class="version-badge">v2.0 · IC26</small></span>
       </a>
       <div class="header-actions">
+        <button class="icon-button" id="toggle-mobile-mode" title="Switch Mobile / Desktop Layout" aria-label="Toggle Mobile Layout">📱</button>
         <button class="icon-button" id="toggle-contrast" title="Toggle High Contrast Mode (WCAG AAA)" aria-label="Toggle High Contrast Mode">◐</button>
         <button class="icon-button" id="toggle-font-size" title="Cycle Text Size (Normal / Large / XL)" aria-label="Cycle Text Size">A⁺</button>
         <button class="icon-button mobile-close" id="mobile-close" aria-label="Close side panel">×</button>
@@ -129,6 +133,23 @@
               <span class="mode-icon">⚡</span>
               <span class="mode-label">Standard</span>
             </button>
+          </div>
+
+          <!-- Dynamic Mode Description Card (Visible when buttons are clicked) -->
+          <div class="mode-description-card" id="mode-description-card" role="region" aria-live="polite">
+            <div class="desc-badge-row">
+              <span class="desc-badge" id="desc-mode-badge">♿ STEP-FREE ROUTING</span>
+              <span class="desc-compliance" id="desc-compliance-badge">MoHUA HG-2021 Compliant</span>
+            </div>
+            <p class="desc-text" id="desc-mode-text">
+              Strictly avoids all stairs, steps, and unramped kerbs. Enforces gentle slopes (≤ 1:12 / 8.3%), minimum 1200mm path clearance, and dropped kerbs with flush lips (≤ 15mm).
+            </p>
+            <div class="desc-tags-row" id="desc-tags-row">
+              <span class="tag-item">✓ Zero Stairs</span>
+              <span class="tag-item">✓ Ramps &amp; Elevators</span>
+              <span class="tag-item">✓ Slope ≤ 8.3%</span>
+              <span class="tag-item">✓ Width ≥ 1200mm</span>
+            </div>
           </div>
 
           <!-- Origin / Destination Fields -->

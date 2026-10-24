@@ -1438,6 +1438,12 @@ function setRoutePoint(type, latlng, label = null) {
   pickMode = null;
   updateRouteButtons();
 
+  const sidebarEl = document.querySelector('#sidebar');
+  if (sidebarEl && sidebarEl.classList.contains('sheet-collapsed')) {
+    sidebarEl.classList.remove('sheet-collapsed');
+    setTimeout(() => { if (map && map.invalidateSize) map.invalidateSize(); }, 320);
+  }
+
   if (routePoints.origin && routePoints.destination) {
     map.fitBounds(L.latLngBounds(routePoints.origin, routePoints.destination).pad(0.3));
     findAccessibleRoute();
@@ -1594,11 +1600,89 @@ function escapeHtml(value) {
 }
 
 // ==========================================
-// 12. EVENT LISTENERS & DOM SETUP
+// 12. MODE DESCRIPTIONS & BOTTOM SHEET HELPERS
+// ==========================================
+
+const MODE_DESCRIPTIONS = {
+  wheelchair: {
+    badge: '♿ STEP-FREE ROUTING',
+    compliance: 'MoHUA HG-2021 Compliant',
+    text: 'Strictly avoids all stairs, steps, escalators, and unramped kerbs. Enforces gentle slopes (≤ 1:12 / 8.3%), minimum 1200mm path clearance, and dropped kerbs with flush lips (≤ 15mm).',
+    tags: [
+      '✓ Zero Stairs',
+      '✓ Ramps & Elevators',
+      '✓ Slope ≤ 8.3%',
+      '✓ Width ≥ 1200mm',
+      '✓ Flush Dropped Kerbs'
+    ]
+  },
+  tactile: {
+    badge: '🦯 TACTILE & LOW-HAZARD ROUTING',
+    compliance: 'Clause 4.3 Tactile Ground Surface',
+    text: 'Follows paths with continuous directional (sinusoidal) and hazard warning (blister) tactile indicators. Avoids low overhead obstacles (< 2100mm), bollards without contrast, and unprotected drop-offs.',
+    tags: [
+      '✓ Guiding Pavers',
+      '✓ Audio Crossings',
+      '✓ Headroom ≥ 2.1m',
+      '✓ Zero Protrusions',
+      '✓ High Contrast'
+    ]
+  },
+  assisted: {
+    badge: '🚶 EASY WALK & REST-STOP ROUTING',
+    compliance: 'Universal Mobility Standards',
+    text: 'Designed for senior citizens, crutch users, and individuals with temporary mobility limitations. Prioritizes shortest walking distances, shaded rest spots every 50m, gentle gradients, and routes with sturdy handrails.',
+    tags: [
+      '✓ Minimal Walking Effort',
+      '✓ Seating & Benches',
+      '✓ Slope ≤ 5%',
+      '✓ Firm Non-Slip Surface',
+      '✓ Handrail Support'
+    ]
+  },
+  standard: {
+    badge: '⚡ DIRECT PEDESTRIAN PATH',
+    compliance: 'Unfiltered Pedestrian Network',
+    text: 'Direct route prioritizing shortest geographic distance. May include steep stairs, kerbs without ramps, narrow footpaths (< 900mm), and unpaved terrain. Recommended only for ambulant individuals without mobility aids.',
+    tags: [
+      '⚡ Shortest Distance',
+      '⚠️ May Contain Stairs',
+      '⚠️ Steep Inclines Possible',
+      '⚠️ Uneven Pavement'
+    ]
+  }
+};
+
+function updateModeDescription(modeKey) {
+  const data = MODE_DESCRIPTIONS[modeKey] || MODE_DESCRIPTIONS.wheelchair;
+  const card = document.querySelector('#mode-description-card');
+  const badgeEl = document.querySelector('#desc-mode-badge');
+  const compEl = document.querySelector('#desc-compliance-badge');
+  const textEl = document.querySelector('#desc-mode-text');
+  const tagsEl = document.querySelector('#desc-tags-row');
+
+  if (!card) return;
+
+  if (badgeEl) badgeEl.textContent = data.badge;
+  if (compEl) compEl.textContent = data.compliance;
+  if (textEl) textEl.textContent = data.text;
+  if (tagsEl) {
+    tagsEl.innerHTML = data.tags.map(t => `<span class="tag-item">${t}</span>`).join('');
+  }
+
+  // Visual pulse highlight animation
+  card.classList.remove('desc-highlight');
+  void card.offsetWidth; // Force CSS reflow
+  card.classList.add('desc-highlight');
+}
+
+// ==========================================
+// 13. EVENT LISTENERS & DOM SETUP
 // ==========================================
 
 document.addEventListener('DOMContentLoaded', () => {
   initMap();
+  updateModeDescription(currentMode);
 
   // Precinct Switcher
   document.querySelector('#precinct-select').addEventListener('change', e => {
@@ -1620,7 +1704,7 @@ document.addEventListener('DOMContentLoaded', () => {
     setRoutePoint('destination', L.latLng(p.nodes.n7.lat, p.nodes.n7.lng), 'OPD Entrance A');
   });
 
-  // Route Mode Selector
+  // Route Mode Selector (updates description when clicked)
   document.querySelectorAll('.mode-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       document.querySelectorAll('.mode-btn').forEach(b => {
@@ -1630,6 +1714,7 @@ document.addEventListener('DOMContentLoaded', () => {
       btn.classList.add('active');
       btn.setAttribute('aria-checked', 'true');
       currentMode = btn.dataset.mode;
+      updateModeDescription(currentMode);
 
       if (routePoints.origin && routePoints.destination) {
         findAccessibleRoute();
@@ -1643,8 +1728,18 @@ document.addEventListener('DOMContentLoaded', () => {
       pickMode = btn.dataset.pick;
       document.querySelectorAll('.route-line').forEach(l => l.classList.remove('picking'));
       btn.parentElement.classList.add('picking');
-      setMapStatus(`Click map to choose ${pickMode === 'origin' ? 'starting point' : 'destination'}`);
-      if (window.innerWidth <= 820) document.querySelector('#sidebar').classList.remove('mobile-open');
+      const pointName = pickMode === 'origin' ? 'starting point' : 'destination';
+      setMapStatus(`Click map to choose ${pointName}`);
+      showToast(`Tap map above to select ${pointName}`);
+
+      const sidebarEl = document.querySelector('#sidebar');
+      if (window.innerWidth <= 860 || document.body.classList.contains('mobile-layout-active')) {
+        if (sidebarEl) {
+          sidebarEl.classList.add('sheet-collapsed');
+          sidebarEl.classList.remove('sheet-expanded');
+          setTimeout(() => { if (map && map.invalidateSize) map.invalidateSize(); }, 320);
+        }
+      }
     });
   });
 
@@ -1688,18 +1783,88 @@ document.addEventListener('DOMContentLoaded', () => {
   document.querySelector('#open-resource-tab').addEventListener('click', () => switchPanel('standards'));
   document.querySelector('#directions-back-btn').addEventListener('click', () => switchPanel('explore'));
 
-  // Mobile drawer controls
-  document.querySelector('#mobile-panel-toggle').addEventListener('click', () => {
-    document.querySelector('#sidebar').classList.add('mobile-open');
-    setTimeout(() => map.invalidateSize(), 260);
-  });
-  document.querySelector('#mobile-close').addEventListener('click', () => {
-    document.querySelector('#sidebar').classList.remove('mobile-open');
-  });
-  document.querySelector('#collapse-sidebar').addEventListener('click', () => {
-    const col = document.querySelector('#sidebar').classList.toggle('collapsed');
-    setTimeout(() => map.invalidateSize(), 260);
-  });
+  // Mobile drawer controls & Mobile View Toggle
+  const toggleMobileBtn = document.querySelector('#toggle-mobile-mode');
+  if (toggleMobileBtn) {
+    toggleMobileBtn.addEventListener('click', () => {
+      const isMobile = document.body.classList.toggle('mobile-layout-active');
+      toggleMobileBtn.classList.toggle('active', isMobile);
+      showToast(isMobile ? 'Mobile Interface Active: Map on top, Journey Planner at bottom' : 'Desktop Interface Active: Sidebar on left, Map on right');
+      setTimeout(() => { if (map && map.invalidateSize) map.invalidateSize(); }, 320);
+    });
+  }
+
+  // Bottom Sheet Handle (Tap & Swipe Gestures)
+  const bottomSheetHandle = document.querySelector('#bottom-sheet-handle');
+  const sidebar = document.querySelector('#sidebar');
+  if (bottomSheetHandle && sidebar) {
+    bottomSheetHandle.addEventListener('click', () => {
+      if (sidebar.classList.contains('sheet-collapsed')) {
+        sidebar.classList.remove('sheet-collapsed');
+      } else if (sidebar.classList.contains('sheet-expanded')) {
+        sidebar.classList.remove('sheet-expanded');
+      } else {
+        sidebar.classList.add('sheet-expanded');
+      }
+      setTimeout(() => { if (map && map.invalidateSize) map.invalidateSize(); }, 320);
+    });
+
+    let touchStartY = 0;
+    let touchEndY = 0;
+
+    bottomSheetHandle.addEventListener('touchstart', e => {
+      touchStartY = e.touches[0].clientY;
+      touchEndY = touchStartY;
+    }, { passive: true });
+
+    bottomSheetHandle.addEventListener('touchmove', e => {
+      touchEndY = e.touches[0].clientY;
+    }, { passive: true });
+
+    bottomSheetHandle.addEventListener('touchend', () => {
+      const diffY = touchEndY - touchStartY;
+      if (Math.abs(diffY) > 30) {
+        if (diffY < -30) {
+          // Swiped up -> expand
+          sidebar.classList.remove('sheet-collapsed');
+          sidebar.classList.add('sheet-expanded');
+        } else if (diffY > 30) {
+          // Swiped down
+          if (sidebar.classList.contains('sheet-expanded')) {
+            sidebar.classList.remove('sheet-expanded');
+          } else {
+            sidebar.classList.add('sheet-collapsed');
+          }
+        }
+        setTimeout(() => { if (map && map.invalidateSize) map.invalidateSize(); }, 320);
+      }
+    });
+  }
+
+  const mobilePanelToggle = document.querySelector('#mobile-panel-toggle');
+  if (mobilePanelToggle) {
+    mobilePanelToggle.addEventListener('click', () => {
+      sidebar.classList.remove('sheet-collapsed');
+      sidebar.classList.add('sheet-expanded');
+      setTimeout(() => { if (map && map.invalidateSize) map.invalidateSize(); }, 320);
+    });
+  }
+
+  const mobileClose = document.querySelector('#mobile-close');
+  if (mobileClose) {
+    mobileClose.addEventListener('click', () => {
+      sidebar.classList.add('sheet-collapsed');
+      setTimeout(() => { if (map && map.invalidateSize) map.invalidateSize(); }, 320);
+    });
+  }
+
+  const collapseSidebar = document.querySelector('#collapse-sidebar');
+  if (collapseSidebar) {
+    collapseSidebar.addEventListener('click', () => {
+      const col = sidebar.classList.toggle('collapsed');
+      setTimeout(() => { if (map && map.invalidateSize) map.invalidateSize(); }, 260);
+    });
+  }
 
   // Accessibility Toggles: Contrast & Font Size
   document.querySelector('#toggle-contrast').addEventListener('click', () => {
