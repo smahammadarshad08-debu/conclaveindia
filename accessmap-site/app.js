@@ -544,6 +544,13 @@ function loadPrecinct(key) {
   map.setView(precinct.center, precinct.zoom);
   setMapStatus(`${precinct.name} · Verified Accessible Precinct`);
 
+  const mobSelect = document.querySelector('#mobile-precinct-select');
+  if (mobSelect) mobSelect.value = key;
+  const pillText = document.querySelector('#mobile-search-pill-text');
+  if (pillText && precinct) {
+    pillText.textContent = `Search ${precinct.name.split('(')[0].trim()}...`;
+  }
+
   // Render Network Walkways
   renderNetworkWalkways(precinct);
 
@@ -756,6 +763,12 @@ function updateReportCountsAndBadges() {
   const badge = document.querySelector('#moderation-count-badge');
   badge.textContent = pending;
   badge.style.display = pending > 0 ? 'inline-block' : 'none';
+
+  const mobModBadge = document.querySelector('#mobile-moderation-badge');
+  if (mobModBadge) {
+    mobModBadge.textContent = pending;
+    mobModBadge.style.display = pending > 0 ? 'inline-block' : 'none';
+  }
 
   document.querySelector('#mod-stat-pending').textContent = pending;
   document.querySelector('#mod-stat-verified').textContent = verified;
@@ -1064,6 +1077,8 @@ function renderRouteResult(accessible, standard) {
 
   // Update Directions Badge
   document.querySelector('#directions-badge').hidden = false;
+  const mobDirBadge = document.querySelector('#mobile-directions-badge');
+  if (mobDirBadge) mobDirBadge.hidden = false;
   document.querySelector('#metric-dist').textContent = `${accessible.totalDistance}m`;
   document.querySelector('#metric-time').textContent = `${rollTimeMin} min`;
   document.querySelector('#metric-stairs-avoided').textContent = `${stairsAvoided}`;
@@ -1466,6 +1481,8 @@ function clearRoute() {
 
   document.querySelector('#route-result').hidden = true;
   document.querySelector('#directions-badge').hidden = true;
+  const mobDirBadge = document.querySelector('#mobile-directions-badge');
+  if (mobDirBadge) mobDirBadge.hidden = true;
   document.querySelector('#directions-steplist').innerHTML = '<div class="empty-directions-notice">Select route points to view directions.</div>';
 
   updateRouteButtons();
@@ -1571,6 +1588,12 @@ function switchPanel(name) {
     tab.setAttribute('aria-selected', String(active));
   });
 
+  document.querySelectorAll('.mobile-nav-item').forEach(item => {
+    const active = item.dataset.panel === name;
+    item.classList.toggle('active', active);
+    item.setAttribute('aria-selected', String(active));
+  });
+
   document.querySelectorAll('.panel-view').forEach(view => {
     const active = view.id === `panel-${name}`;
     view.classList.toggle('active', active);
@@ -1578,7 +1601,13 @@ function switchPanel(name) {
   });
 
   document.querySelector('#panel-scroll-container').scrollTop = 0;
-  document.querySelector('#sidebar').classList.add('mobile-open');
+  const sidebar = document.querySelector('#sidebar');
+  if (sidebar) {
+    sidebar.classList.add('mobile-open');
+    if (sidebar.classList.contains('sheet-collapsed')) {
+      sidebar.classList.remove('sheet-collapsed');
+    }
+  }
 
   setTimeout(() => map && map.invalidateSize(), 260);
 }
@@ -1653,6 +1682,12 @@ const MODE_DESCRIPTIONS = {
   }
 };
 
+function triggerHaptic(ms = 10) {
+  if (typeof navigator !== 'undefined' && navigator.vibrate) {
+    try { navigator.vibrate(ms); } catch (_) {}
+  }
+}
+
 function updateModeDescription(modeKey) {
   const data = MODE_DESCRIPTIONS[modeKey] || MODE_DESCRIPTIONS.wheelchair;
   const card = document.querySelector('#mode-description-card');
@@ -1668,6 +1703,12 @@ function updateModeDescription(modeKey) {
   if (textEl) textEl.textContent = data.text;
   if (tagsEl) {
     tagsEl.innerHTML = data.tags.map(t => `<span class="tag-item">${t}</span>`).join('');
+  }
+
+  const peekBadge = document.querySelector('#sheet-peek-badge');
+  if (peekBadge) {
+    const labels = { wheelchair: '♿ Step-Free', tactile: '🦯 Tactile', assisted: '🚶 Easy Walk', standard: '⚡ Standard' };
+    peekBadge.textContent = labels[modeKey] || '♿ Step-Free';
   }
 
   // Visual pulse highlight animation
@@ -1783,10 +1824,126 @@ document.addEventListener('DOMContentLoaded', () => {
   document.querySelector('#open-resource-tab').addEventListener('click', () => switchPanel('standards'));
   document.querySelector('#directions-back-btn').addEventListener('click', () => switchPanel('explore'));
 
+  // View Mode Switcher (Desktop Switcher)
+  function setViewMode(mode) {
+    document.body.classList.remove('mobile-layout-active', 'mode-device-frame');
+    document.querySelectorAll('.switcher-btn').forEach(b => {
+      const active = b.dataset.view === mode;
+      b.classList.toggle('active', active);
+      b.setAttribute('aria-selected', String(active));
+    });
+
+    if (mode === 'mobile-app') {
+      document.body.classList.add('mobile-layout-active');
+      showToast('Switched to Native Fullscreen Mobile App View');
+    } else if (mode === 'device-frame') {
+      document.body.classList.add('mode-device-frame');
+      showToast('Switched to Smartphone Mockup Frame');
+    } else {
+      showToast('Switched to Classic Desktop Layout');
+    }
+    setTimeout(() => { if (map && map.invalidateSize) map.invalidateSize(); }, 320);
+  }
+
+  document.querySelectorAll('.switcher-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      triggerHaptic(15);
+      setViewMode(btn.dataset.view);
+    });
+  });
+
+  // Mobile Bottom Navigation Bar (Plan, Route, Audits, Standards, More)
+  document.querySelectorAll('.mobile-nav-item').forEach(item => {
+    item.addEventListener('click', () => {
+      triggerHaptic(12);
+      const targetPanel = item.dataset.panel;
+      switchPanel(targetPanel);
+
+      document.querySelectorAll('.mobile-nav-item').forEach(i => {
+        const active = i.dataset.panel === targetPanel;
+        i.classList.toggle('active', active);
+        i.setAttribute('aria-selected', String(active));
+      });
+
+      if (sidebar.classList.contains('sheet-collapsed')) {
+        sidebar.classList.remove('sheet-collapsed');
+      }
+      setTimeout(() => { if (map && map.invalidateSize) map.invalidateSize(); }, 320);
+    });
+  });
+
+  // Mobile Floating Top Bar
+  const mobileSearchPill = document.querySelector('#mobile-search-pill');
+  if (mobileSearchPill) {
+    mobileSearchPill.addEventListener('click', () => {
+      triggerHaptic(10);
+      switchPanel('explore');
+      sidebar.classList.remove('sheet-collapsed');
+      sidebar.classList.add('sheet-expanded');
+      const input = document.querySelector('#place-search');
+      if (input) {
+        input.focus();
+        input.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    });
+  }
+
+  const mobilePrecinctSelect = document.querySelector('#mobile-precinct-select');
+  if (mobilePrecinctSelect) {
+    mobilePrecinctSelect.addEventListener('change', e => {
+      triggerHaptic(10);
+      const val = e.target.value;
+      const mainSelect = document.querySelector('#precinct-select');
+      if (mainSelect) mainSelect.value = val;
+      loadPrecinct(val);
+    });
+  }
+
+  const mobileTopContrast = document.querySelector('#mobile-top-contrast');
+  if (mobileTopContrast) {
+    mobileTopContrast.addEventListener('click', () => {
+      triggerHaptic(12);
+      const isHC = document.body.classList.toggle('theme-high-contrast');
+      showToast(isHC ? 'High Contrast Mode Enabled (WCAG AAA)' : 'Standard Theme Active');
+    });
+  }
+
+  // Mobile Floating Action Buttons (FABs)
+  const fabLocate = document.querySelector('#mobile-fab-locate');
+  if (fabLocate) {
+    fabLocate.addEventListener('click', () => {
+      triggerHaptic(15);
+      const btn = document.querySelector('#locate-button');
+      if (btn) btn.click();
+    });
+  }
+
+  const fabReport = document.querySelector('#mobile-fab-report');
+  if (fabReport) {
+    fabReport.addEventListener('click', () => {
+      triggerHaptic(15);
+      const btn = document.querySelector('#map-report');
+      if (btn) btn.click();
+    });
+  }
+
+  const fabRecenter = document.querySelector('#mobile-fab-recenter');
+  if (fabRecenter) {
+    fabRecenter.addEventListener('click', () => {
+      triggerHaptic(12);
+      const p = PRECINCTS[currentPrecinctKey];
+      if (p && map) {
+        map.flyTo(p.center, p.zoom, { duration: 0.8 });
+        showToast(`Map recentered to ${p.name}`);
+      }
+    });
+  }
+
   // Mobile drawer controls & Mobile View Toggle
   const toggleMobileBtn = document.querySelector('#toggle-mobile-mode');
   if (toggleMobileBtn) {
     toggleMobileBtn.addEventListener('click', () => {
+      triggerHaptic(12);
       const isMobile = document.body.classList.toggle('mobile-layout-active');
       toggleMobileBtn.classList.toggle('active', isMobile);
       showToast(isMobile ? 'Mobile Interface Active: Map on top, Journey Planner at bottom' : 'Desktop Interface Active: Sidebar on left, Map on right');

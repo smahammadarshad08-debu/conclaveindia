@@ -1,0 +1,19 @@
+{
+  "name": "AccessMap India — Accessible Urban Navigation",
+  "short_name": "AccessMap",
+  "description": "MoHUA Harmonised Guidelines 2021 compliant accessible route navigation, barrier reporting, and moderation.",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#12241b",
+  "theme_color": "#12241b",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "map-preview.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["navigation", "accessibility", "travel", "utilities"]
+}
