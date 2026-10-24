@@ -1,12 +1,95 @@
-# Byte-compiled / optimized / DLL files
+# ==============================================================================
+# AccessMap India — Comprehensive Git Ignore Rules
+# ==============================================================================
+
+# Python
 __pycache__/
 *.py[cod]
 *$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
 
-# OS generated files
-Thumbs.db
-Desktop.ini
+# Virtual Environments
+venv/
+.venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# Environment Variables & Secrets
+.env
+.env.local
+.env.*.local
+*.env
+
+# Operating System Files
+# macOS
 .DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
 
-# Temporary logs
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+Desktop.ini
+$RECYCLE.BIN/
+*.cab
+*.msi
+*.msm
+*.msp
+
+# Linux
+*~
+.directory
+
+# IDE & Code Editors
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+.idea/
+*.sublime-project
+*.sublime-workspace
+*.swp
+*.swo
+*.bak
+
+# Node & Package Managers (if present)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.pnpm-debug.log*
+
+# Test, Profiling & Scratch Artifacts
+scratch/
+debug/
 *.log
+edge_prof_*
+edge_profile*
+temp/
+tmp/
+*.tmp

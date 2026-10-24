@@ -1,7 +1,26 @@
+# Render Blueprint Specification for AccessMap India
+# https://render.com/docs/blueprint-spec
 services:
+  # Option 1: Python Web Service (Recommended for dynamic healthchecks & headers)
   - type: web
-    name: conclave-accessmap
-    env: python
-    buildCommand: ""
-    startCommand: python server.py
+    name: accessmap-india
+    runtime: python
+    region: oregon
     plan: free
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "python server.py"
+    healthCheckPath: /healthz
+    autoDeploy: true
+    envVars:
+      - key: PORT
+        value: 10000
+
+  # Option 2: Render Static Site (Zero runtime, purely CDN served)
+  - type: web
+    name: accessmap-india-static
+    runtime: static
+    region: oregon
+    plan: free
+    buildCommand: "echo 'Static assets ready'"
+    staticPublishPath: ./accessmap-site
+    pullRequestPreviewsEnabled: true

@@ -1,1 +1,3 @@
-# AccessMap — Pure Standard Library HTTP Server
+# AccessMap India — Python Dependencies
+# Pure standard library architecture (http.server, socketserver, signal, json)
+# Zero external packages required for 0-second build and zero dependency failures on Render.
