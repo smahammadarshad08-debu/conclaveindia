@@ -594,7 +594,7 @@ function loadPrecinct(key) {
 
   // Update lists and counts
   updateCategoryCounts();
-  renderFeatureList();
+  updateInfrastructureVisibility();
   renderModerationList();
   updateReportCountsAndBadges();
 
@@ -616,7 +616,12 @@ function pinIcon(kind, glyph) {
 }
 
 function renderNetworkWalkways(precinct) {
-  layers.walkways.clearLayers();
+  if (layers.walkways) layers.walkways.clearLayers();
+  if (layers.steps) layers.steps.clearLayers();
+  if (layers.ramps) layers.ramps.clearLayers();
+  if (layers.crossings) layers.crossings.clearLayers();
+  if (layers.tactile) layers.tactile.clearLayers();
+
   if (!precinct.edges || !precinct.nodes) return;
 
   const activeBarriers = getActiveBarrierIds();
@@ -630,25 +635,31 @@ function renderNetworkWalkways(precinct) {
     let dashArray = null;
     let weight = 5;
     let opacity = 0.85;
+    let targetLayer = layers.walkways;
 
     const isBlocked = edge.barrierId && activeBarriers.has(edge.barrierId);
 
     if (isBlocked) {
       color = '#ef4444'; // red blocked
       dashArray = '6 6';
+      targetLayer = layers.walkways;
     } else if (edge.type === 'steps' || edge.stepCount > 0) {
       color = '#a8734d'; // brown steps
       dashArray = '4 4';
       weight = 4;
+      targetLayer = layers.steps;
     } else if (edge.type === 'tactile_path' || edge.tactile) {
       color = '#8b5cf6'; // purple tactile
       weight = 5;
-    } else if (edge.type === 'ramp') {
+      targetLayer = layers.tactile;
+    } else if (edge.type === 'ramp' || edge.type === 'elevator') {
       color = '#059669'; // deep green ramp
       weight = 6;
+      targetLayer = layers.ramps;
     } else if (edge.type === 'crossing') {
       color = '#3b82f6'; // blue crossing
       dashArray = '3 5';
+      targetLayer = layers.crossings;
     }
 
     const polyline = L.polyline([[fromNode.lat, fromNode.lng], [toNode.lat, toNode.lng]], {
@@ -658,7 +669,11 @@ function renderNetworkWalkways(precinct) {
       dashArray: dashArray,
       lineCap: 'round',
       lineJoin: 'round'
-    }).addTo(layers.walkways);
+    });
+
+    if (targetLayer) {
+      polyline.addTo(targetLayer);
+    }
 
     const complianceText = edge.stepCount > 0 ? '❌ Inaccessible (Stair Barrier)' : '✓ HG-2021 Step-Free';
     const detail = `
@@ -759,13 +774,30 @@ function renderReportsLayer() {
   });
 }
 
+function getActiveCategoryFilters() {
+  const filters = {
+    steps: true,
+    ramps: true,
+    crossings: true,
+    tactile: true,
+    places: true,
+    reports: true
+  };
+  document.querySelectorAll('[data-osm-category]').forEach(input => {
+    filters[input.dataset.osmCategory] = input.checked;
+  });
+  return filters;
+}
+
 function updateCategoryCounts() {
   const precinct = PRECINCTS[currentPrecinctKey];
   const features = precinct ? precinct.features || [] : [];
+  const edges = precinct ? precinct.edges || [] : [];
   const reports = getStoredReports();
 
   let countSteps = 0, countRamps = 0, countCrossings = 0, countTactile = 0, countPlaces = 0;
 
+  // Features count
   features.forEach(f => {
     if (f.type === 'steps') countSteps++;
     else if (f.type === 'ramp') countRamps++;
@@ -774,12 +806,64 @@ function updateCategoryCounts() {
     else countPlaces++;
   });
 
-  document.querySelector('#count-steps').textContent = countSteps;
-  document.querySelector('#count-ramps').textContent = countRamps;
-  document.querySelector('#count-crossings').textContent = countCrossings;
-  document.querySelector('#count-tactile').textContent = countTactile;
-  document.querySelector('#count-places').textContent = countPlaces;
-  document.querySelector('#report-count').textContent = reports.length;
+  // Edge network count
+  edges.forEach(e => {
+    if (e.type === 'steps' || e.stepCount > 0) countSteps++;
+    else if (e.type === 'ramp' || e.type === 'elevator') countRamps++;
+    else if (e.type === 'crossing') countCrossings++;
+    else if (e.type === 'tactile_path' || e.tactile) countTactile++;
+  });
+
+  const elSteps = document.querySelector('#count-steps');
+  const elRamps = document.querySelector('#count-ramps');
+  const elCrossings = document.querySelector('#count-crossings');
+  const elTactile = document.querySelector('#count-tactile');
+  const elPlaces = document.querySelector('#count-places');
+  const elReports = document.querySelector('#report-count');
+
+  if (elSteps) elSteps.textContent = countSteps;
+  if (elRamps) elRamps.textContent = countRamps;
+  if (elCrossings) elCrossings.textContent = countCrossings;
+  if (elTactile) elTactile.textContent = countTactile;
+  if (elPlaces) elPlaces.textContent = countPlaces;
+  if (elReports) elReports.textContent = reports.length;
+}
+
+function updateInfrastructureVisibility(changedCategory = null) {
+  const activeFilters = getActiveCategoryFilters();
+
+  // Update map layer groups
+  Object.entries(activeFilters).forEach(([cat, isChecked]) => {
+    const layer = layers[cat];
+    if (layer && map) {
+      if (isChecked) {
+        if (!map.hasLayer(layer)) {
+          map.addLayer(layer);
+        }
+      } else {
+        if (map.hasLayer(layer)) {
+          map.removeLayer(layer);
+        }
+      }
+    }
+  });
+
+  // Re-render the feature list with current filters
+  renderFeatureList(activeFilters);
+
+  if (changedCategory) {
+    const isChecked = activeFilters[changedCategory];
+    const catLabels = {
+      steps: 'Steps & stairs',
+      ramps: 'Ramps & elevators',
+      crossings: 'Crossings & dropped kerbs',
+      tactile: 'Tactile guiding paths',
+      places: 'Accessible entrances',
+      reports: 'Community & auditor reports'
+    };
+    const name = catLabels[changedCategory] || changedCategory;
+    showToast(isChecked ? `${name} visible on map` : `${name} hidden from map`);
+  }
 }
 
 function updateReportCountsAndBadges() {
@@ -808,35 +892,89 @@ function updateReportCountsAndBadges() {
   document.querySelector('#mod-stat-total').textContent = reports.length;
 }
 
-function renderFeatureList() {
+function renderFeatureList(filters = null) {
   const list = document.querySelector('#feature-list');
+  if (!list) return;
+
   const precinct = PRECINCTS[currentPrecinctKey];
   const features = precinct ? precinct.features || [] : [];
   const reports = getStoredReports();
+  const activeFilters = filters || getActiveCategoryFilters();
 
   list.innerHTML = '';
-  const totalCount = features.length + reports.length;
-  if (!totalCount) {
-    list.innerHTML = '<div class="tiny-note">No features loaded for this view.</div>';
+
+  // Filter features
+  const visibleFeatures = features.filter(f => {
+    if (f.type === 'steps') return activeFilters.steps;
+    if (f.type === 'ramp') return activeFilters.ramps;
+    if (f.type === 'crossing') return activeFilters.crossings;
+    if (f.type === 'tactile') return activeFilters.tactile;
+    return activeFilters.places;
+  });
+
+  // Filter reports
+  const visibleReports = activeFilters.reports ? reports : [];
+
+  const totalVisible = visibleFeatures.length + visibleReports.length;
+
+  if (totalVisible === 0) {
+    const allOff = Object.values(activeFilters).every(v => !v);
+    list.innerHTML = `
+      <div style="padding:16px 12px;text-align:center;color:#6b7280;font-size:12px;background:#f9fafb;border-radius:10px;border:1px dashed #d1d5db;margin-top:8px;">
+        ${allOff ? 'All category layers are currently hidden.' : 'No features match active filters.'}<br>
+        <span style="font-size:11px;color:#9ca3af;display:block;margin-top:4px;">Turn on switches above to view infrastructure items.</span>
+      </div>
+    `;
     return;
   }
 
-  list.innerHTML = `<div class="feature-list-heading">${totalCount} AUDITED INFRASTRUCTURE ITEMS</div>`;
+  const heading = document.createElement('div');
+  heading.className = 'feature-list-heading';
+  heading.textContent = `${totalVisible} AUDITED INFRASTRUCTURE ITEMS`;
+  list.appendChild(heading);
 
-  features.forEach(f => {
+  visibleFeatures.forEach(f => {
     const row = document.createElement('button');
     row.className = 'feature-row';
+    row.type = 'button';
     const isPass = f.accessStatus === 'passable';
+    let typeIcon = '♿';
+    if (f.type === 'ramp') typeIcon = '↗';
+    else if (f.type === 'steps') typeIcon = '↟';
+    else if (f.type === 'crossing') typeIcon = '╱';
+    else if (f.type === 'tactile') typeIcon = '⠶';
+
     row.innerHTML = `
       <div class="feature-row-top">
-        <b>${escapeHtml(f.title)}</b>
+        <b><span style="margin-right:4px;">${typeIcon}</span>${escapeHtml(f.title)}</b>
         <span class="conf-pill ${f.confidence}">${f.confidence.toUpperCase()} CONF</span>
       </div>
       <span>${escapeHtml(f.complianceHG2021.clause)} · ${isPass ? 'Compliant' : 'Non-compliant'}</span>
     `;
     row.addEventListener('click', () => {
+      if (typeof triggerHaptic === 'function') triggerHaptic(10);
       map.flyTo([f.lat, f.lon], 18, { duration: 0.5 });
       if (f.marker) setTimeout(() => f.marker.openPopup(), 520);
+    });
+    list.appendChild(row);
+  });
+
+  visibleReports.forEach(r => {
+    const row = document.createElement('button');
+    row.className = 'feature-row feature-report-row';
+    row.type = 'button';
+    const isBlocked = r.severity === 'blocked';
+    row.innerHTML = `
+      <div class="feature-row-top">
+        <b style="color:${isBlocked ? '#b91c1c' : '#b45309'};"><span style="margin-right:4px;">⚠️</span>${escapeHtml(r.type)}</b>
+        <span class="conf-pill ${r.moderationState === 'verified' ? 'high' : 'medium'}">${r.moderationState.toUpperCase()}</span>
+      </div>
+      <span>${escapeHtml(r.note || 'Reported barrier')} · ${r.severity.toUpperCase()}</span>
+    `;
+    row.addEventListener('click', () => {
+      if (typeof triggerHaptic === 'function') triggerHaptic(10);
+      map.flyTo([r.lat, r.lon], 18, { duration: 0.5 });
+      if (r.marker) setTimeout(() => r.marker.openPopup(), 520);
     });
     list.appendChild(row);
   });
@@ -2274,8 +2412,11 @@ document.addEventListener('DOMContentLoaded', () => {
       sidebar.classList.add('sheet-expanded');
       const input = document.querySelector('#place-search');
       if (input) {
-        input.focus();
-        input.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        input.focus({ preventScroll: true });
+        const scrollContainer = document.querySelector('#panel-scroll-container');
+        if (scrollContainer) {
+          scrollContainer.scrollTo({ top: input.offsetTop - 20, behavior: 'smooth' });
+        }
       }
     });
   }
@@ -2543,14 +2684,9 @@ document.addEventListener('DOMContentLoaded', () => {
   // Category Layer Toggles
   document.querySelectorAll('[data-osm-category]').forEach(input => {
     input.addEventListener('change', () => {
+      if (typeof triggerHaptic === 'function') triggerHaptic(10);
       const cat = input.dataset.osmCategory;
-      const checked = input.checked;
-      if (cat === 'steps' && layers.steps) checked ? map.addLayer(layers.steps) : map.removeLayer(layers.steps);
-      if (cat === 'ramps' && layers.ramps) checked ? map.addLayer(layers.ramps) : map.removeLayer(layers.ramps);
-      if (cat === 'crossings' && layers.crossings) checked ? map.addLayer(layers.crossings) : map.removeLayer(layers.crossings);
-      if (cat === 'tactile' && layers.tactile) checked ? map.addLayer(layers.tactile) : map.removeLayer(layers.tactile);
-      if (cat === 'places' && layers.places) checked ? map.addLayer(layers.places) : map.removeLayer(layers.places);
-      if (cat === 'reports' && layers.reports) checked ? map.addLayer(layers.reports) : map.removeLayer(layers.reports);
+      updateInfrastructureVisibility(cat);
     });
   });
 
@@ -2559,18 +2695,40 @@ document.addEventListener('DOMContentLoaded', () => {
   const viewListBtn = document.querySelector('#view-list-mode');
   if (viewMapBtn && viewListBtn) {
     viewMapBtn.addEventListener('click', () => {
+      if (typeof triggerHaptic === 'function') triggerHaptic(10);
       viewMapBtn.classList.add('active');
       viewListBtn.classList.remove('active');
-      document.querySelector('#feature-list').style.maxHeight = '280px';
-      document.querySelector('#feature-list').style.overflowY = 'auto';
+      const sidebar = document.querySelector('.sidebar');
+      if (sidebar && window.innerWidth <= 840) {
+        sidebar.classList.remove('sheet-expanded');
+        sidebar.classList.add('sheet-collapsed');
+      }
+      setTimeout(() => {
+        if (map && map.invalidateSize) map.invalidateSize();
+      }, 300);
       showToast('Map view focused.');
     });
+
     viewListBtn.addEventListener('click', () => {
+      if (typeof triggerHaptic === 'function') triggerHaptic(10);
       viewListBtn.classList.add('active');
       viewMapBtn.classList.remove('active');
-      document.querySelector('#feature-list').style.maxHeight = 'none';
-      document.querySelector('#feature-list').scrollIntoView({ behavior: 'smooth', block: 'start' });
-      showToast('Accessible table/list view expanded.');
+      const sidebar = document.querySelector('.sidebar');
+      if (sidebar && window.innerWidth <= 840) {
+        sidebar.classList.remove('sheet-collapsed');
+        sidebar.classList.add('sheet-expanded');
+      }
+      const scrollContainer = document.querySelector('#panel-scroll-container');
+      const featureList = document.querySelector('#feature-list');
+      if (scrollContainer && featureList) {
+        setTimeout(() => {
+          scrollContainer.scrollTo({
+            top: featureList.offsetTop - 16,
+            behavior: 'smooth'
+          });
+        }, 150);
+      }
+      showToast('Audited infrastructure list expanded.');
     });
   }
 
@@ -2677,4 +2835,13 @@ window.openInspectorModal = openInspectorModal;
 window.verifyReport = verifyReport;
 window.resolveReport = resolveReport;
 window.rejectReport = rejectReport;
+window.updateInfrastructureVisibility = updateInfrastructureVisibility;
+
+// Window scroll lock guard to prevent mobile browser viewport displacement
+window.addEventListener('scroll', () => {
+  if (window.scrollY !== 0 || window.scrollX !== 0) {
+    window.scrollTo(0, 0);
+  }
+}, { passive: true });
+
 
