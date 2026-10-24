@@ -865,91 +865,48 @@ body.theme-high-contrast .route-result { background: #0c1a10; border-color: #22c
 }
 
 /* ===================================================
-   MOBILE APP INTERFACE & DEVICE FRAME SYSTEM
+   MOBILE APP INTERFACE
    =================================================== */
 
-/* View Mode Switcher Bar (Desktop only, hidden on mobile) */
-.app-mode-switcher-bar {
-  position: fixed;
-  top: 12px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 1500;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  background: rgba(18, 36, 27, 0.92);
-  backdrop-filter: blur(12px);
-  padding: 6px 14px;
-  border-radius: 30px;
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
-  color: #fff;
-}
-.switcher-brand {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 11px;
-}
-.switcher-dot {
-  color: #22c55e;
-  font-size: 10px;
-}
-.switcher-brand b {
-  color: #fff;
-  letter-spacing: -0.3px;
-}
-.switcher-sub {
-  color: #94a3b8;
-  font-size: 10px;
-}
-.switcher-buttons {
-  display: flex;
-  gap: 4px;
-}
-.switcher-btn {
-  border: 0;
-  background: transparent;
-  color: #cbd5e1;
-  font-size: 11px;
-  font-weight: 600;
-  padding: 5px 12px;
-  border-radius: 20px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-.switcher-btn:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: #fff;
-}
-.switcher-btn.active {
-  background: var(--green);
-  color: var(--forest);
-  font-weight: 800;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-}
-
-/* App Viewport Wrapper */
-.app-viewport-wrapper {
-  position: fixed;
-  inset: 0;
-  width: 100vw;
-  height: 100vh;
+body {
   overflow: hidden;
+  touch-action: pan-x pan-y;
   background: var(--paper);
+  margin: 0;
+  padding: 0;
+  height: 100vh;
+  height: 100dvh;
 }
 
-/* Phone Mockup Chrome (Default hidden, shown in device-frame mode) */
-.phone-dynamic-island,
-.phone-status-bar,
-.phone-home-indicator {
-  display: none;
+/* Map Shell (Full screen background) */
+.map-shell {
+  position: fixed;
+  inset: 0 0 0 0;
+  width: 100%;
+  height: 100%;
+  z-index: 10;
+  background: #e4e8e1;
+}
+#map {
+  position: absolute;
+  inset: 0;
+}
+
+/* Hide legacy desktop controls & notices */
+.sidebar-header,
+.sidebar-tabs,
+.map-error-card,
+.mobile-panel-toggle,
+.collapse-button,
+.mobile-close,
+.map-top-actions,
+.map-legend {
+  display: none !important;
 }
 
 /* Bottom Sheet Handle & Peek Bar */
 .bottom-sheet-handle {
-  display: none;
+  display: flex;
   width: 100%;
   padding: 8px 0 6px;
   background: var(--surface);
@@ -1019,10 +976,52 @@ body.theme-high-contrast .peek-badge {
   color: var(--muted);
 }
 
+/* Bottom Sheet Drawer */
+.sidebar {
+  position: fixed;
+  inset: auto 0 58px 0;
+  width: 100% !important;
+  height: 50vh;
+  max-height: calc(100% - 58px - 30px);
+  border-radius: 24px 24px 0 0;
+  border-right: none;
+  border-top: 1px solid var(--line-strong);
+  box-shadow: 0 -8px 30px rgba(18, 36, 27, 0.22);
+  transform: none !important;
+  z-index: 500;
+  display: flex;
+  flex-direction: column;
+  transition: height 0.32s cubic-bezier(0.2, 0.9, 0.3, 1);
+  overflow: hidden;
+  background: var(--surface);
+}
+.sidebar.sheet-expanded {
+  height: calc(100% - 58px - 30px);
+}
+.sidebar.sheet-collapsed {
+  height: 52px;
+}
+.sidebar.sheet-collapsed .panel-scroll {
+  display: none !important;
+}
+.sidebar.sheet-collapsed .sheet-peek-bar {
+  display: flex !important;
+}
+.panel-section {
+  padding: 14px 16px;
+}
+.route-mode-selector {
+  gap: 5px;
+}
+.mode-btn {
+  min-height: 52px;
+  padding: 6px 2px;
+}
+
 /* Mobile App Floating Top Bar */
 .mobile-app-floating-top {
-  display: none;
-  position: absolute;
+  display: flex;
+  position: fixed;
   top: 14px;
   left: 14px;
   right: 14px;
@@ -1097,8 +1096,8 @@ body.theme-high-contrast .peek-badge {
 
 /* Mobile Floating Action Buttons (FABs) */
 .mobile-fab-stack {
-  display: none;
-  position: absolute;
+  display: flex;
+  position: fixed;
   right: 14px;
   bottom: 74px;
   z-index: 450;
@@ -1135,8 +1134,8 @@ body.theme-high-contrast .mobile-top-icon-pill {
 
 /* Mobile Bottom Navigation Bar */
 .mobile-bottom-nav {
-  display: none;
-  position: absolute;
+  display: flex;
+  position: fixed;
   inset: auto 0 0 0;
   width: 100%;
   height: 58px;
@@ -1197,251 +1196,6 @@ body.theme-high-contrast .mobile-nav-item.active {
   padding: 1px 5px;
   border-radius: 8px;
   line-height: 1;
-}
-
-/* ===================================================
-   SHARED MOBILE APP RULES (Active when <= 860px, .mobile-layout-active, or .mode-device-frame)
-   =================================================== */
-
-@media (max-width: 860px) {
-  .app-mode-switcher-bar { display: none !important; }
-}
-
-body.mobile-layout-active,
-@media (max-width: 860px) {
-  body {
-    overflow: hidden;
-    touch-action: pan-x pan-y;
-  }
-  .app-viewport-wrapper {
-    position: fixed;
-    inset: 0;
-    width: 100vw;
-    height: 100vh;
-    height: 100dvh;
-    overflow: hidden;
-  }
-  .bottom-sheet-handle {
-    display: flex;
-  }
-  .mobile-app-floating-top {
-    display: flex;
-  }
-  .mobile-fab-stack {
-    display: flex;
-  }
-  .mobile-bottom-nav {
-    display: flex;
-  }
-  .sidebar-tabs {
-    display: none !important;
-  }
-  .collapse-button,
-  .mobile-close,
-  .mobile-panel-toggle {
-    display: none !important;
-  }
-  .map-top-actions,
-  .map-legend {
-    display: none !important;
-  }
-  .map-shell {
-    position: absolute;
-    inset: 0 0 0 0;
-    width: 100%;
-    height: 100%;
-    z-index: 10;
-  }
-  .sidebar {
-    position: absolute;
-    inset: auto 0 58px 0;
-    width: 100% !important;
-    height: 50vh;
-    max-height: calc(100% - 58px - 40px);
-    border-radius: 24px 24px 0 0;
-    border-right: none;
-    border-top: 1px solid var(--line-strong);
-    box-shadow: 0 -8px 30px rgba(18, 36, 27, 0.22);
-    transform: none !important;
-    z-index: 500;
-    display: flex;
-    flex-direction: column;
-    transition: height 0.32s cubic-bezier(0.2, 0.9, 0.3, 1);
-    overflow: hidden;
-  }
-  .sidebar.sheet-expanded {
-    height: calc(100% - 58px - 30px);
-  }
-  .sidebar.sheet-collapsed {
-    height: 52px;
-  }
-  .sidebar.sheet-collapsed .sidebar-header,
-  .sidebar.sheet-collapsed .panel-scroll {
-    display: none !important;
-  }
-  .sidebar.sheet-collapsed .sheet-peek-bar {
-    display: flex !important;
-  }
-  .sidebar-header {
-    height: 50px;
-    flex: 0 0 50px;
-    padding: 0 16px;
-  }
-  .panel-section {
-    padding: 14px 16px;
-  }
-  .route-mode-selector {
-    gap: 5px;
-  }
-  .mode-btn {
-    min-height: 52px;
-    padding: 6px 2px;
-  }
-}
-
-/* ===================================================
-   REALISTIC SMARTPHONE DEVICE FRAME (Phone Mockup Mode)
-   =================================================== */
-
-body.mode-device-frame {
-  background: radial-gradient(circle at 50% 25%, #193325 0%, #08110b 100%);
-  min-height: 100vh;
-  overflow: auto;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-}
-body.mode-device-frame .app-viewport-wrapper {
-  position: relative;
-  width: 395px;
-  height: 812px;
-  max-height: calc(100vh - 80px);
-  margin: 55px auto 20px;
-  border-radius: 48px;
-  border: 11px solid #1c231f;
-  box-shadow:
-    0 0 0 2px #35493c,
-    0 25px 70px rgba(0, 0, 0, 0.75),
-    inset 0 0 4px rgba(255, 255, 255, 0.15);
-  overflow: hidden;
-  background: #fff;
-}
-body.mode-device-frame .phone-dynamic-island {
-  display: flex;
-  position: absolute;
-  top: 10px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 114px;
-  height: 28px;
-  border-radius: 16px;
-  background: #000;
-  z-index: 9999;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 12px;
-  box-sizing: border-box;
-  pointer-events: none;
-}
-body.mode-device-frame .island-camera {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: #111;
-  border: 1px solid #222;
-}
-body.mode-device-frame .island-sensor {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: #0c1a10;
-}
-body.mode-device-frame .phone-status-bar {
-  display: flex;
-  position: absolute;
-  top: 13px;
-  left: 24px;
-  right: 24px;
-  justify-content: space-between;
-  font-size: 11px;
-  font-weight: 800;
-  font-family: var(--sans);
-  color: var(--forest);
-  z-index: 9998;
-  pointer-events: none;
-}
-body.mode-device-frame .status-icons {
-  display: flex;
-  gap: 4px;
-  align-items: center;
-}
-body.mode-device-frame .phone-home-indicator {
-  display: block;
-  position: absolute;
-  bottom: 8px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 134px;
-  height: 4px;
-  border-radius: 2px;
-  background: var(--ink);
-  opacity: 0.7;
-  z-index: 9999;
-  pointer-events: none;
-}
-body.mode-device-frame .bottom-sheet-handle { display: flex; }
-body.mode-device-frame .mobile-app-floating-top { display: flex; top: 48px; }
-body.mode-device-frame .mobile-fab-stack { display: flex; }
-body.mode-device-frame .mobile-bottom-nav { display: flex; }
-body.mode-device-frame .sidebar-tabs { display: none !important; }
-body.mode-device-frame .collapse-button,
-body.mode-device-frame .mobile-close,
-body.mode-device-frame .mobile-panel-toggle,
-body.mode-device-frame .map-top-actions,
-body.mode-device-frame .map-legend { display: none !important; }
-body.mode-device-frame .map-shell {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  z-index: 10;
-}
-body.mode-device-frame .sidebar {
-  position: absolute;
-  inset: auto 0 58px 0;
-  width: 100% !important;
-  height: 50%;
-  max-height: calc(100% - 58px - 60px);
-  border-radius: 24px 24px 0 0;
-  border-right: none;
-  border-top: 1px solid var(--line-strong);
-  box-shadow: 0 -8px 30px rgba(18, 36, 27, 0.22);
-  transform: none !important;
-  z-index: 500;
-  display: flex;
-  flex-direction: column;
-  transition: height 0.32s cubic-bezier(0.2, 0.9, 0.3, 1);
-  overflow: hidden;
-}
-body.mode-device-frame .sidebar.sheet-expanded {
-  height: calc(100% - 58px - 40px);
-}
-body.mode-device-frame .sidebar.sheet-collapsed {
-  height: 52px;
-}
-body.mode-device-frame .sidebar.sheet-collapsed .sidebar-header,
-body.mode-device-frame .sidebar.sheet-collapsed .panel-scroll {
-  display: none !important;
-}
-body.mode-device-frame .sidebar.sheet-collapsed .sheet-peek-bar {
-  display: flex !important;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
-    scroll-behavior: auto !important; transition: none !important; animation: none !important;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {

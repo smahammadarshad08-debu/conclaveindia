@@ -515,20 +515,6 @@ function setupTileLayerWithFallback() {
     maxZoom: 19,
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors · MoHUA Guidelines'
   }).addTo(map);
-
-  let tileErrorCount = 0;
-  mapTiles.on('tileerror', () => {
-    tileErrorCount += 1;
-    if (tileErrorCount >= 4) {
-      document.querySelector('#map-error-card').hidden = false;
-    }
-  });
-  mapTiles.on('tileload', () => {
-    tileErrorCount = Math.max(0, tileErrorCount - 1);
-    if (tileErrorCount < 2) {
-      document.querySelector('#map-error-card').hidden = true;
-    }
-  });
 }
 
 function loadPrecinct(key) {
@@ -1824,34 +1810,6 @@ document.addEventListener('DOMContentLoaded', () => {
   document.querySelector('#open-resource-tab').addEventListener('click', () => switchPanel('standards'));
   document.querySelector('#directions-back-btn').addEventListener('click', () => switchPanel('explore'));
 
-  // View Mode Switcher (Desktop Switcher)
-  function setViewMode(mode) {
-    document.body.classList.remove('mobile-layout-active', 'mode-device-frame');
-    document.querySelectorAll('.switcher-btn').forEach(b => {
-      const active = b.dataset.view === mode;
-      b.classList.toggle('active', active);
-      b.setAttribute('aria-selected', String(active));
-    });
-
-    if (mode === 'mobile-app') {
-      document.body.classList.add('mobile-layout-active');
-      showToast('Switched to Native Fullscreen Mobile App View');
-    } else if (mode === 'device-frame') {
-      document.body.classList.add('mode-device-frame');
-      showToast('Switched to Smartphone Mockup Frame');
-    } else {
-      showToast('Switched to Classic Desktop Layout');
-    }
-    setTimeout(() => { if (map && map.invalidateSize) map.invalidateSize(); }, 320);
-  }
-
-  document.querySelectorAll('.switcher-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      triggerHaptic(15);
-      setViewMode(btn.dataset.view);
-    });
-  });
-
   // Mobile Bottom Navigation Bar (Plan, Route, Audits, Standards, More)
   document.querySelectorAll('.mobile-nav-item').forEach(item => {
     item.addEventListener('click', () => {
@@ -2024,26 +1982,32 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // Accessibility Toggles: Contrast & Font Size
-  document.querySelector('#toggle-contrast').addEventListener('click', () => {
-    const isHC = document.body.classList.toggle('theme-high-contrast');
-    showToast(isHC ? 'High Contrast Mode Enabled (WCAG AAA)' : 'Standard Theme Active');
-  });
+  const toggleContrastBtn = document.querySelector('#toggle-contrast');
+  if (toggleContrastBtn) {
+    toggleContrastBtn.addEventListener('click', () => {
+      const isHC = document.body.classList.toggle('theme-high-contrast');
+      showToast(isHC ? 'High Contrast Mode Enabled (WCAG AAA)' : 'Standard Theme Active');
+    });
+  }
 
-  document.querySelector('#toggle-font-size').addEventListener('click', () => {
-    if (document.body.classList.contains('font-normal')) {
-      document.body.classList.remove('font-normal');
-      document.body.classList.add('font-large');
-      showToast('Font Size: Large');
-    } else if (document.body.classList.contains('font-large')) {
-      document.body.classList.remove('font-large');
-      document.body.classList.add('font-xl');
-      showToast('Font Size: Extra Large');
-    } else {
-      document.body.classList.remove('font-xl');
-      document.body.classList.add('font-normal');
-      showToast('Font Size: Standard');
-    }
-  });
+  const toggleFontSizeBtn = document.querySelector('#toggle-font-size');
+  if (toggleFontSizeBtn) {
+    toggleFontSizeBtn.addEventListener('click', () => {
+      if (document.body.classList.contains('font-normal')) {
+        document.body.classList.remove('font-normal');
+        document.body.classList.add('font-large');
+        showToast('Font Size: Large');
+      } else if (document.body.classList.contains('font-large')) {
+        document.body.classList.remove('font-large');
+        document.body.classList.add('font-xl');
+        showToast('Font Size: Extra Large');
+      } else {
+        document.body.classList.remove('font-xl');
+        document.body.classList.add('font-normal');
+        showToast('Font Size: Standard');
+      }
+    });
+  }
 
   // Speech readout
   document.querySelector('#speak-directions-btn').addEventListener('click', speakDirectionsAloud);
@@ -2110,7 +2074,13 @@ document.addEventListener('DOMContentLoaded', () => {
   document.querySelector('#close-dialog').addEventListener('click', () => document.querySelector('#barrier-dialog').close());
   document.querySelector('#close-inspector-dialog').addEventListener('click', () => document.querySelector('#inspector-dialog').close());
   document.querySelector('#close-landmark-dialog').addEventListener('click', () => document.querySelector('#landmark-dialog').close());
-  document.querySelector('#dismiss-map-error').addEventListener('click', () => { document.querySelector('#map-error-card').hidden = true; });
+  const dismissMapErr = document.querySelector('#dismiss-map-error');
+  if (dismissMapErr) {
+    dismissMapErr.addEventListener('click', () => {
+      const errCard = document.querySelector('#map-error-card');
+      if (errCard) errCard.hidden = true;
+    });
+  }
 
   // Moderation desk filter buttons
   document.querySelectorAll('.mod-filter-btn').forEach(btn => {

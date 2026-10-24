@@ -23,59 +23,16 @@
   <a class="skip-link" href="#map">Skip to interactive map</a>
   <a class="skip-link" href="#panel-explore">Skip to navigation controls</a>
 
-  <!-- View Mode Switcher for Desktop -->
-  <header class="app-mode-switcher-bar" id="app-mode-switcher-bar">
-    <div class="switcher-brand">
-      <span class="switcher-dot">●</span>
-      <b>AccessMap</b> <span class="switcher-sub">Mobile App Interface</span>
-    </div>
-    <div class="switcher-buttons" role="radiogroup" aria-label="Display View Mode">
-      <button class="switcher-btn active" id="btn-view-mobile-app" data-view="mobile-app" title="Native Fullscreen Mobile App View">📱 Mobile App</button>
-      <button class="switcher-btn" id="btn-view-device-frame" data-view="device-frame" title="Realistic Smartphone Device Frame (iPhone 16 Pro mockup)">📲 Phone Frame</button>
-      <button class="switcher-btn" id="btn-view-desktop" data-view="desktop" title="Classic Desktop Dual-Pane Layout">💻 Desktop</button>
-    </div>
-  </header>
-
-  <div class="app-viewport-wrapper" id="app-viewport-wrapper">
-    <!-- Phone Mockup Chrome (Rendered in Phone Frame mode) -->
-    <div class="phone-dynamic-island" aria-hidden="true">
-      <span class="island-camera"></span>
-      <span class="island-sensor"></span>
-    </div>
-    <div class="phone-status-bar" aria-hidden="true">
-      <span class="status-time">9:41</span>
-      <div class="status-icons">
-        <span class="status-icon">5G</span>
-        <span class="status-icon battery">100%</span>
+  <!-- Accessible Bottom Sheet Panel -->
+  <aside class="sidebar" id="sidebar" aria-label="AccessMap journey controls">
+    <div class="bottom-sheet-handle" id="bottom-sheet-handle" role="button" tabindex="0" aria-label="Expand or collapse bottom journey controls" title="Tap or drag to expand or collapse bottom sheet">
+      <span class="handle-bar"></span>
+      <div class="sheet-peek-bar" id="sheet-peek-bar">
+        <span class="peek-badge" id="sheet-peek-badge">♿ Step-Free</span>
+        <span class="peek-prompt" id="sheet-peek-prompt">Tap or swipe up to plan route</span>
+        <span class="peek-chevron" id="sheet-peek-chevron">▲</span>
       </div>
     </div>
-    <div class="phone-home-indicator" aria-hidden="true"></div>
-
-    <!-- Top accessibility & demo bar (Desktop & Mobile) -->
-    <aside class="sidebar" id="sidebar" aria-label="AccessMap control panel">
-      <div class="bottom-sheet-handle" id="bottom-sheet-handle" role="button" tabindex="0" aria-label="Expand or collapse bottom journey controls" title="Tap or drag to expand or collapse bottom sheet">
-        <span class="handle-bar"></span>
-        <div class="sheet-peek-bar" id="sheet-peek-bar">
-          <span class="peek-badge" id="sheet-peek-badge">♿ Step-Free</span>
-          <span class="peek-prompt" id="sheet-peek-prompt">Tap or swipe up to plan route</span>
-          <span class="peek-chevron" id="sheet-peek-chevron">▲</span>
-        </div>
-      </div>
-    <header class="sidebar-header">
-      <a class="brand" href="#" aria-label="AccessMap Home">
-        <span class="brand-mark" aria-hidden="true">
-          <svg viewBox="0 0 32 32"><path d="M5 23.5 12.3 8l7.1 15.5L27 8"/><circle cx="5" cy="23.5" r="2.4"/><circle cx="27" cy="8" r="2.4"/><circle cx="12.3" cy="8" r="2"/></svg>
-        </span>
-        <span class="brand-text">access<span>map</span> <small class="version-badge">v2.0 · IC26</small></span>
-      </a>
-      <div class="header-actions">
-        <button class="icon-button" id="toggle-mobile-mode" title="Switch Mobile / Desktop Layout" aria-label="Toggle Mobile Layout">📱</button>
-        <button class="icon-button" id="toggle-contrast" title="Toggle High Contrast Mode (WCAG AAA)" aria-label="Toggle High Contrast Mode">◐</button>
-        <button class="icon-button" id="toggle-font-size" title="Cycle Text Size (Normal / Large / XL)" aria-label="Cycle Text Size">A⁺</button>
-        <button class="icon-button mobile-close" id="mobile-close" aria-label="Close side panel">×</button>
-        <button class="icon-button collapse-button" id="collapse-sidebar" aria-label="Collapse side panel">‹</button>
-      </div>
-    </header>
 
     <nav class="sidebar-tabs" role="tablist" aria-label="Navigation views">
       <button class="sidebar-tab active" data-panel="explore" role="tab" aria-selected="true" id="tab-explore">
@@ -729,16 +686,6 @@
       </button>
     </div>
 
-    <!-- Error/Notice Banner -->
-    <div class="map-error-card" id="map-error-card" hidden>
-      <span class="map-error-icon" aria-hidden="true">!</span>
-      <div>
-        <b>Live tile service notice</b>
-        <span>Direct file previews or rate limits may affect public OSM tiles. The platform provides full built-in offline vector layers and local routing for all demo precincts.</span>
-      </div>
-      <button id="dismiss-map-error" aria-label="Dismiss message">×</button>
-    </div>
-
     <!-- Mobile Panel Toggle -->
     <button class="mobile-panel-toggle" id="mobile-panel-toggle" aria-label="Open AccessMap side panel">
       <span aria-hidden="true">☰</span>
@@ -806,7 +753,6 @@
       <span class="mobile-nav-label">More</span>
     </button>
   </nav>
-</div> <!-- /app-viewport-wrapper -->
 
   <!-- Barrier Report Dialog -->
   <dialog id="barrier-dialog" class="report-dialog" aria-labelledby="dialog-title">
