@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 1000" role="img" aria-label="Illustrative neighborhood map">
+  <defs>
+    <pattern id="smallBlocks" width="240" height="210" patternUnits="userSpaceOnUse">
+      <rect width="240" height="210" fill="#edf0e9"/>
+      <rect x="13" y="12" width="93" height="72" rx="5" fill="#e3e7df"/>
+      <rect x="122" y="12" width="105" height="72" rx="5" fill="#e6e9e2"/>
+      <rect x="13" y="96" width="93" height="99" rx="5" fill="#e5e8e1"/>
+      <rect x="122" y="96" width="105" height="99" rx="5" fill="#e1e6de"/>
+      <path d="M22 27h36v23H22zm47 0h27v14H69zm64 0h45v28h-45zm56 0h36v20h-36zM23 111h29v34H23zm40 0h32v19H63zm71 0h31v35h-31zm43 0h39v20h-39zM24 158h51v25H24zm112 0h31v25h-31zm48 0h40v25h-40z" fill="#f0f1ed" opacity=".86"/>
+    </pattern>
+    <pattern id="treeDots" width="34" height="34" patternUnits="userSpaceOnUse">
+      <circle cx="10" cy="12" r="5" fill="#c8d9bc"/><circle cx="26" cy="25" r="4" fill="#d0dfc6"/>
+    </pattern>
+    <filter id="soft"><feGaussianBlur stdDeviation="1.2"/></filter>
+  </defs>
+  <rect width="1400" height="1000" fill="#edf0e9"/>
+  <rect x="0" y="0" width="1400" height="1000" fill="url(#smallBlocks)"/>
+  <!-- Broad public streets -->
+  <path d="M-40 250 C260 208 410 292 700 246 S1110 196 1440 248" fill="none" stroke="#d8ddd5" stroke-width="46"/>
+  <path d="M-40 250 C260 208 410 292 700 246 S1110 196 1440 248" fill="none" stroke="#fbfcf9" stroke-width="39"/>
+  <path d="M-40 690 C290 638 440 735 760 679 S1130 640 1440 686" fill="none" stroke="#d8ddd5" stroke-width="42"/>
+  <path d="M-40 690 C290 638 440 735 760 679 S1130 640 1440 686" fill="none" stroke="#fbfcf9" stroke-width="35"/>
+  <path d="M340 -30 C305 180 382 326 345 520 S315 790 352 1030" fill="none" stroke="#d8ddd5" stroke-width="42"/>
+  <path d="M340 -30 C305 180 382 326 345 520 S315 790 352 1030" fill="none" stroke="#fbfcf9" stroke-width="35"/>
+  <path d="M1030 -30 C992 170 1064 360 1026 550 S1000 812 1040 1030" fill="none" stroke="#d8ddd5" stroke-width="44"/>
+  <path d="M1030 -30 C992 170 1064 360 1026 550 S1000 812 1040 1030" fill="none" stroke="#fbfcf9" stroke-width="37"/>
+  <!-- A small greenway and park -->
+  <path d="M516 313 Q535 284 576 294 L844 313 Q882 319 878 360 L850 568 Q846 600 808 596 L535 572 Q500 568 503 532Z" fill="#d8e6d0" stroke="#cbdcc2" stroke-width="3"/>
+  <path d="M516 313 Q535 284 576 294 L844 313 Q882 319 878 360 L850 568 Q846 600 808 596 L535 572 Q500 568 503 532Z" fill="url(#treeDots)" opacity=".9"/>
+  <path d="M550 454 C624 421 699 485 770 450 S833 446 856 454" fill="none" stroke="#fbfcf9" stroke-width="13" stroke-linecap="round"/>
+  <path d="M550 454 C624 421 699 485 770 450 S833 446 856 454" fill="none" stroke="#b4cba7" stroke-width="2" stroke-dasharray="5 7"/>
+  <rect x="567" y="362" width="95" height="42" rx="10" fill="#e5eddc"/><text x="614" y="388" text-anchor="middle" font-family="Arial,sans-serif" font-size="13" font-weight="700" letter-spacing="2" fill="#839978">GARDEN</text>
+  <!-- A waterway at the edge of the district -->
+  <path d="M1240 -30 C1185 142 1300 250 1244 415 S1196 712 1260 1030" fill="none" stroke="#d7e5e4" stroke-width="72"/>
+  <path d="M1240 -30 C1185 142 1300 250 1244 415 S1196 712 1260 1030" fill="none" stroke="#e7f0ef" stroke-width="60"/>
+  <path d="M1240 -30 C1185 142 1300 250 1244 415 S1196 712 1260 1030" fill="none" stroke="#d4e4e2" stroke-width="2" stroke-dasharray="5 14"/>
+  <!-- Local streets -->
+  <g fill="none" stroke-linecap="round">
+    <path d="M105 105 C190 126 248 126 300 110 M422 135 C507 117 585 123 670 135 M755 117 C855 105 927 121 1005 112 M1090 130 C1150 120 1195 119 1220 115" stroke="#fff" stroke-width="12"/>
+    <path d="M120 420 C191 401 250 415 311 405 M394 412 C469 426 518 416 576 408 M867 404 C916 423 968 412 1012 395 M1061 411 C1130 422 1171 416 1222 401" stroke="#fff" stroke-width="11"/>
+    <path d="M112 840 C188 814 251 834 319 822 M390 831 C465 844 526 833 601 820 M864 827 C930 842 964 833 1020 815 M1060 835 C1131 845 1175 830 1223 815" stroke="#fff" stroke-width="12"/>
+    <path d="M154 116 C171 235 165 317 185 407 M181 436 C163 520 177 614 165 666 M172 720 C164 774 171 808 167 824 M586 140 C572 226 586 260 594 302 M595 600 C582 649 584 760 597 822 M812 136 C828 215 818 258 815 305 M816 608 C831 672 813 754 827 817 M1168 138 C1150 232 1160 323 1147 393 M1150 444 C1170 532 1158 614 1175 667 M1167 712 C1155 772 1165 790 1160 817" stroke="#fff" stroke-width="11"/>
+  </g>
+  <!-- Tree rows and open civic spaces -->
+  <g fill="#a9c391" opacity=".9">
+    <circle cx="473" cy="330" r="9"/><circle cx="491" cy="360" r="7"/><circle cx="477" cy="392" r="8"/><circle cx="886" cy="355" r="8"/><circle cx="879" cy="391" r="7"/><circle cx="892" cy="527" r="8"/>
+    <circle cx="448" cy="614" r="8"/><circle cx="477" cy="621" r="7"/><circle cx="911" cy="616" r="9"/><circle cx="941" cy="620" r="7"/>
+  </g>
+  <!-- Quiet labels -->
+  <g font-family="Arial,sans-serif" font-size="12" font-weight="700" letter-spacing="2.2" fill="#9aa398">
+    <text x="205" y="229">PARK LANE</text><text x="675" y="228">CIVIC STREET</text><text x="450" y="666">MARKET WALK</text><text x="1080" y="659">RIVER ROAD</text>
+    <text x="68" y="74" font-size="10" fill="#a7aea5">ILLUSTRATIVE NEIGHBOURHOOD · NOT GEOGRAPHIC DATA</text>
+  </g>
+</svg>

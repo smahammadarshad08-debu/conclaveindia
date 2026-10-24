@@ -1,0 +1,803 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#1e3a2c">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <meta name="description" content="AccessMap — MoHUA & Harmonised Guidelines 2021 compliant accessible route planning, barrier reporting, and moderation platform.">
+  <title>AccessMap — Accessible Places, Clearer Journeys (IC26-04-04)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="theme-standard font-normal">
+  <a class="skip-link" href="#map">Skip to interactive map</a>
+  <a class="skip-link" href="#panel-explore">Skip to navigation controls</a>
+
+  <!-- Top accessibility & demo bar (Desktop & Mobile) -->
+  <aside class="sidebar" id="sidebar" aria-label="AccessMap control panel">
+    <header class="sidebar-header">
+      <a class="brand" href="#" aria-label="AccessMap Home">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 32 32"><path d="M5 23.5 12.3 8l7.1 15.5L27 8"/><circle cx="5" cy="23.5" r="2.4"/><circle cx="27" cy="8" r="2.4"/><circle cx="12.3" cy="8" r="2"/></svg>
+        </span>
+        <span class="brand-text">access<span>map</span> <small class="version-badge">v2.0 · IC26</small></span>
+      </a>
+      <div class="header-actions">
+        <button class="icon-button" id="toggle-contrast" title="Toggle High Contrast Mode (WCAG AAA)" aria-label="Toggle High Contrast Mode">◐</button>
+        <button class="icon-button" id="toggle-font-size" title="Cycle Text Size (Normal / Large / XL)" aria-label="Cycle Text Size">A⁺</button>
+        <button class="icon-button mobile-close" id="mobile-close" aria-label="Close side panel">×</button>
+        <button class="icon-button collapse-button" id="collapse-sidebar" aria-label="Collapse side panel">‹</button>
+      </div>
+    </header>
+
+    <nav class="sidebar-tabs" role="tablist" aria-label="Navigation views">
+      <button class="sidebar-tab active" data-panel="explore" role="tab" aria-selected="true" id="tab-explore">
+        <span class="tab-icon">⌕</span>Explore
+      </button>
+      <button class="sidebar-tab" data-panel="directions" role="tab" aria-selected="false" id="tab-directions">
+        <span class="tab-icon">↗</span>Directions <span class="badge" id="directions-badge" hidden>1</span>
+      </button>
+      <button class="sidebar-tab" data-panel="moderation" role="tab" aria-selected="false" id="tab-moderation">
+        <span class="tab-icon">⚖</span>Audits <span class="badge badge-accent" id="moderation-count-badge">3</span>
+      </button>
+      <button class="sidebar-tab" data-panel="standards" role="tab" aria-selected="false" id="tab-standards">
+        <span class="tab-icon">✓</span>Standards
+      </button>
+      <button class="sidebar-tab" data-panel="resources" role="tab" aria-selected="false" id="tab-resources">
+        <span class="tab-icon">▤</span>Library
+      </button>
+      <button class="sidebar-tab" data-panel="about" role="tab" aria-selected="false" id="tab-about">
+        <span class="tab-icon">✳</span>About
+      </button>
+    </nav>
+
+    <div class="panel-scroll" id="panel-scroll-container">
+      <!-- 1. EXPLORE PANEL -->
+      <section class="panel-view active" id="panel-explore" role="tabpanel" aria-labelledby="tab-explore">
+        <!-- Preset Demo Precinct Selector -->
+        <div class="demo-precinct-bar">
+          <div class="demo-precinct-header">
+            <span class="kicker">CURATED SMALL-AREA DEMO PRECINCTS</span>
+            <span class="offline-ready-pill" title="Fully interactive offline with verified field audits">● Offline Ready</span>
+          </div>
+          <div class="precinct-selector-wrapper">
+            <label for="precinct-select" class="sr-only">Choose a demo precinct</label>
+            <select id="precinct-select" class="precinct-select">
+              <option value="aiims">AIIMS Metro & Hospital Precinct (New Delhi)</option>
+              <option value="iitd">IIT Delhi Campus & Academic Precinct</option>
+              <option value="mgroad">Bengaluru MG Road & Metro Transit Hub</option>
+              <option value="custom">Visible Map Area (Live OSM)</option>
+            </select>
+          </div>
+          <div class="quick-scenarios-row">
+            <button class="scenario-chip" id="scenario-stairs-vs-ramp" title="Demonstrate routing avoiding 42 steps via universal ramp">
+              <span>♿</span> Compare Step-Free vs Stairs
+            </button>
+            <button class="scenario-chip" id="scenario-barrier-detour" title="Demonstrate automatic rerouting around a reported construction blockage">
+              <span>⚠️</span> Test Barrier Detour
+            </button>
+          </div>
+        </div>
+
+        <!-- Search area -->
+        <div class="search-area">
+          <label class="sr-only" for="place-search">Search a place, landmark or address</label>
+          <div class="search-box">
+            <span class="search-symbol" aria-hidden="true">⌕</span>
+            <input id="place-search" type="search" placeholder="Search landmark (e.g. AIIMS OPD, IIT Library)" autocomplete="off">
+            <button id="search-submit" aria-label="Execute search">↵</button>
+          </div>
+          <div class="search-quick-tags" id="search-quick-tags">
+            <span class="quick-tag-label">Quick:</span>
+            <button class="quick-tag" data-query="Metro Elevator">Metro Lift</button>
+            <button class="quick-tag" data-query="Universal Ramp">Ramp</button>
+            <button class="quick-tag" data-query="Pelican Crossing">Crossing</button>
+            <button class="quick-tag" data-query="Main OPD Entrance">OPD</button>
+          </div>
+        </div>
+
+        <!-- Route Planning Section -->
+        <div class="panel-section route-section">
+          <div class="panel-title-row">
+            <div>
+              <span class="kicker">ACCESSIBLE JOURNEY PLANNER</span>
+              <h1>Plan an accessible route</h1>
+            </div>
+            <button id="clear-route" class="quiet-button" hidden>Clear</button>
+          </div>
+
+          <!-- Route Mode Selector -->
+          <div class="route-mode-selector" role="radiogroup" aria-label="Mobility Profile">
+            <button class="mode-btn active" data-mode="wheelchair" role="radio" aria-checked="true" title="Step-free, ramps <= 1:12, dropped kerbs, min width 1200mm">
+              <span class="mode-icon">♿</span>
+              <span class="mode-label">Step-Free</span>
+            </button>
+            <button class="mode-btn" data-mode="tactile" role="radio" aria-checked="false" title="Tactile paving, audio crossings, low-hazard pathways for visually impaired">
+              <span class="mode-icon">🦯</span>
+              <span class="mode-label">Tactile/Vision</span>
+            </button>
+            <button class="mode-btn" data-mode="assisted" role="radio" aria-checked="false" title="Gentle slopes, rest points, minimal stairs for seniors and crutch users">
+              <span class="mode-icon">🚶</span>
+              <span class="mode-label">Easy Walk</span>
+            </button>
+            <button class="mode-btn" data-mode="standard" role="radio" aria-checked="false" title="Direct pedestrian path (may contain stairs and barriers)">
+              <span class="mode-icon">⚡</span>
+              <span class="mode-label">Standard</span>
+            </button>
+          </div>
+
+          <!-- Origin / Destination Fields -->
+          <div class="route-fields">
+            <div class="route-line origin-line">
+              <span class="route-dot origin" aria-hidden="true"></span>
+              <button class="pick-button" data-pick="origin" id="origin-pick">Choose starting point on map</button>
+              <button class="landmark-pick-btn" data-target="origin" title="Pick from landmarks">▼</button>
+            </div>
+            <div class="route-line destination-line">
+              <span class="route-dot destination" aria-hidden="true"></span>
+              <button class="pick-button" data-pick="destination" id="destination-pick">Choose destination on map</button>
+              <button class="landmark-pick-btn" data-target="destination" title="Pick from landmarks">▼</button>
+            </div>
+            <span class="route-connector" aria-hidden="true"></span>
+            <button class="swap-points-btn" id="swap-route-points" title="Reverse origin and destination" aria-label="Swap origin and destination">⇅</button>
+          </div>
+
+          <!-- Advanced Route Preferences / Filters -->
+          <details class="route-filters-details">
+            <summary class="route-filters-summary">
+              <span>⚙ Route Preferences & Constraints</span>
+              <span class="filters-active-summary" id="filters-active-summary">Step-Free · Avoid Barriers</span>
+            </summary>
+            <div class="route-filters-body">
+              <label class="filter-toggle-label">
+                <span>Avoid all stairs & steps</span>
+                <input type="checkbox" id="pref-avoid-stairs" checked>
+                <i></i>
+              </label>
+              <label class="filter-toggle-label">
+                <span>Avoid reported barriers</span>
+                <input type="checkbox" id="pref-avoid-barriers" checked>
+                <i></i>
+              </label>
+              <label class="filter-toggle-label">
+                <span>Require smooth paved surfaces</span>
+                <input type="checkbox" id="pref-smooth-only" checked>
+                <i></i>
+              </label>
+              <div class="filter-dropdown-row">
+                <label for="pref-max-slope">Max Slope Limit (HG 2021):</label>
+                <select id="pref-max-slope">
+                  <option value="0.05">Gentle (1:20 / 5%)</option>
+                  <option value="0.0833" selected>Standard (1:12 / 8.3%)</option>
+                  <option value="0.10">Steep Ramp (1:10 / 10%)</option>
+                  <option value="1.0">No limit</option>
+                </select>
+              </div>
+              <div class="filter-dropdown-row">
+                <label for="pref-min-width">Min Clear Width:</label>
+                <select id="pref-min-width">
+                  <option value="1.5">1500mm (Two wheelchairs pass)</option>
+                  <option value="1.2" selected>1200mm (HG-2021 baseline)</option>
+                  <option value="0.9">900mm (Minimum door opening)</option>
+                </select>
+              </div>
+            </div>
+          </details>
+
+          <div class="route-actions-row">
+            <button class="primary-button full-button" id="route-submit" disabled>
+              <span>↗</span> Find Accessible Route
+            </button>
+            <button class="secondary-button" id="route-compare-btn" title="Compare accessible route with standard direct route" disabled>
+              Compare Routes
+            </button>
+          </div>
+
+          <!-- Route Comparison & Result Card -->
+          <div class="route-result" id="route-result" hidden>
+            <!-- Injected by JavaScript -->
+          </div>
+        </div>
+
+        <!-- Access Features & What's Around -->
+        <div class="panel-section access-section">
+          <div class="panel-title-row">
+            <div>
+              <span class="kicker">ACCESSIBILITY AUDIT LAYERS</span>
+              <h2>Mapped infrastructure</h2>
+            </div>
+            <div class="view-switch-btns">
+              <button class="view-toggle-btn active" id="view-map-mode" title="View features on map">Map</button>
+              <button class="view-toggle-btn" id="view-list-mode" title="View features as accessible table/list">List</button>
+            </div>
+          </div>
+          <p class="section-copy">Verified accessibility features, slopes, crossings, and community reports in the active precinct.</p>
+
+          <div class="category-list">
+            <label>
+              <span class="category-icon steps" aria-hidden="true">↟</span>
+              <span class="category-name">Steps & Stairs <em class="category-badge" id="count-steps">0</em></span>
+              <input type="checkbox" data-osm-category="steps" checked>
+              <i></i>
+            </label>
+            <label>
+              <span class="category-icon ramps" aria-hidden="true">↗</span>
+              <span class="category-name">Ramps & Elevators <em class="category-badge" id="count-ramps">0</em></span>
+              <input type="checkbox" data-osm-category="ramps" checked>
+              <i></i>
+            </label>
+            <label>
+              <span class="category-icon crossing" aria-hidden="true">╱</span>
+              <span class="category-name">Crossings & Dropped Kerbs <em class="category-badge" id="count-crossings">0</em></span>
+              <input type="checkbox" data-osm-category="crossings" checked>
+              <i></i>
+            </label>
+            <label>
+              <span class="category-icon tactile" aria-hidden="true">⠶</span>
+              <span class="category-name">Tactile Guiding Paths <em class="category-badge" id="count-tactile">0</em></span>
+              <input type="checkbox" data-osm-category="tactile" checked>
+              <i></i>
+            </label>
+            <label>
+              <span class="category-icon places" aria-hidden="true">♿</span>
+              <span class="category-name">Accessible Entrances <em class="category-badge" id="count-places">0</em></span>
+              <input type="checkbox" data-osm-category="places" checked>
+              <i></i>
+            </label>
+            <label>
+              <span class="category-icon reports" aria-hidden="true">!</span>
+              <span class="category-name">Community & Auditor Reports <em class="category-badge" id="report-count">0</em></span>
+              <input type="checkbox" data-osm-category="reports" checked>
+              <i></i>
+            </label>
+          </div>
+
+          <div class="details-action-box">
+            <button class="secondary-button full-button" id="load-details">Refresh / Load live OSM details</button>
+            <p class="tiny-note" id="details-status">Precinct features loaded · field-verified under Harmonised Guidelines 2021.</p>
+          </div>
+
+          <div class="feature-list" id="feature-list" aria-live="polite">
+            <!-- Dynamic feature list -->
+          </div>
+
+          <button class="report-link" id="report-mode">
+            <span>＋</span> Report a barrier or accessibility update on map
+          </button>
+        </div>
+
+        <div class="sidebar-footer">
+          <span class="status-dot online"></span>
+          <span>ACCESSMAP · IC26-04-04 · MoHUA ALIGNED</span>
+          <button id="open-resource-tab">Guidelines ↗</button>
+        </div>
+      </section>
+
+      <!-- 2. DIRECTIONS PANEL (Turn-by-Turn Accessible Guidance) -->
+      <section class="panel-view directions-view" id="panel-directions" role="tabpanel" aria-labelledby="tab-directions" hidden>
+        <div class="view-heading">
+          <div class="directions-back-bar">
+            <button class="back-link-btn" id="directions-back-btn">← Back to Journey Plan</button>
+            <button class="speech-synth-btn" id="speak-directions-btn" title="Read directions aloud with text-to-speech">
+              <span>🔊</span> Read Aloud
+            </button>
+          </div>
+          <span class="kicker">ACCESSIBLE TURN-BY-TURN INSTRUCTIONS</span>
+          <h1 id="directions-title">Accessible Route Guidance</h1>
+          <p id="directions-summary">Step-free route avoiding all stairs and hazardous slopes.</p>
+        </div>
+
+        <div class="directions-metrics-strip" id="directions-metrics-strip">
+          <div class="metric-col">
+            <span class="metric-num" id="metric-dist">0 m</span>
+            <span class="metric-lbl">Total Distance</span>
+          </div>
+          <div class="metric-col">
+            <span class="metric-num" id="metric-time">0 min</span>
+            <span class="metric-lbl">Est. Roll Time</span>
+          </div>
+          <div class="metric-col">
+            <span class="metric-num" id="metric-stairs-avoided">0</span>
+            <span class="metric-lbl">Stairs Avoided</span>
+          </div>
+          <div class="metric-col">
+            <span class="metric-num" id="metric-compliance">100%</span>
+            <span class="metric-lbl">HG-2021 Match</span>
+          </div>
+        </div>
+
+        <div class="directions-steplist" id="directions-steplist" role="list">
+          <div class="empty-directions-notice">
+            <p>Select origin and destination in the <strong>Explore</strong> tab and click <em>Find Accessible Route</em> to view step-by-step guidance.</p>
+          </div>
+        </div>
+
+        <div class="directions-footer-actions">
+          <button class="secondary-button" id="print-route-btn">⎙ Print Route Sheet</button>
+          <button class="secondary-button" id="export-geojson-route-btn">⬇ Export GeoJSON</button>
+        </div>
+      </section>
+
+      <!-- 3. AUDITS & MODERATION PANEL -->
+      <section class="panel-view moderation-view" id="panel-moderation" role="tabpanel" aria-labelledby="tab-moderation" hidden>
+        <div class="view-heading">
+          <span class="kicker">MOHUA & SUGAMYA BHARAT ALIGNED WORKFLOW</span>
+          <h1>Barrier Audit &<br><i>Moderation Desk.</i></h1>
+          <p>Community reports undergo verification before official route weighting. Auditors inspect measurements against Harmonised Guidelines 2021.</p>
+        </div>
+
+        <!-- Audit stats cards -->
+        <div class="moderation-stats-grid">
+          <div class="stat-card pending">
+            <span class="stat-num" id="mod-stat-pending">0</span>
+            <span class="stat-label">Pending Review</span>
+          </div>
+          <div class="stat-card verified">
+            <span class="stat-num" id="mod-stat-verified">0</span>
+            <span class="stat-label">Field Verified</span>
+          </div>
+          <div class="stat-card resolved">
+            <span class="stat-num" id="mod-stat-resolved">0</span>
+            <span class="stat-label">Resolved / Fixed</span>
+          </div>
+          <div class="stat-card total">
+            <span class="stat-num" id="mod-stat-total">0</span>
+            <span class="stat-label">Total Records</span>
+          </div>
+        </div>
+
+        <!-- Filter tabs for moderation -->
+        <div class="moderation-filters" role="tablist">
+          <button class="mod-filter-btn active" data-mod-filter="all">All</button>
+          <button class="mod-filter-btn" data-mod-filter="pending">Pending Review</button>
+          <button class="mod-filter-btn" data-mod-filter="verified">Verified</button>
+          <button class="mod-filter-btn" data-mod-filter="resolved">Resolved</button>
+        </div>
+
+        <div class="moderation-list" id="moderation-list">
+          <!-- Populated by JavaScript -->
+        </div>
+
+        <div class="moderation-data-actions">
+          <span class="kicker">GOVERNMENT INTEGRATION & EXPORT</span>
+          <div class="data-actions-row">
+            <button class="secondary-button" id="export-reports-geojson">Export GeoJSON</button>
+            <button class="secondary-button" id="export-reports-csv">Export CSV</button>
+            <button class="secondary-button" id="reset-reports-demo">Reset Demo Records</button>
+          </div>
+          <small class="data-schema-note">Data schema conforms to MoHUA RPwD Audit specifications and OpenSidewalks standards.</small>
+        </div>
+      </section>
+
+      <!-- 4. STANDARDS & GUIDELINES PANEL -->
+      <section class="panel-view standards-view" id="panel-standards" role="tabpanel" aria-labelledby="tab-standards" hidden>
+        <div class="view-heading">
+          <span class="kicker">NATIONAL REGULATORY BENCHMARKS</span>
+          <h1>Harmonised Guidelines<br><i>India 2021.</i></h1>
+          <p>Official accessibility criteria under MoHUA, DEPwD, and the Rights of Persons with Disabilities (RPwD) Act 2016.</p>
+        </div>
+
+        <div class="standards-content">
+          <div class="standard-card">
+            <div class="standard-header">
+              <span class="standard-tag ramp">HG-2021 § 4.3</span>
+              <h3>Ramps & Landings</h3>
+            </div>
+            <ul class="standard-rules">
+              <li><strong>Max Gradient:</strong> 1:12 (8.33%) for short runs; 1:15 to 1:20 preferred for long runs.</li>
+              <li><strong>Clear Width:</strong> Minimum 1200mm; 1500mm or 1800mm for two-way traffic.</li>
+              <li><strong>Landings:</strong> 1500mm x 1500mm at top, bottom, and every 9m of run.</li>
+              <li><strong>Handrails:</strong> Continuous dual handrails at 750mm and 900mm height with 300mm extensions.</li>
+            </ul>
+          </div>
+
+          <div class="standard-card">
+            <div class="standard-header">
+              <span class="standard-tag sidewalk">HG-2021 § 4.1</span>
+              <h3>Footpaths & Walkways</h3>
+            </div>
+            <ul class="standard-rules">
+              <li><strong>Clear Walking Zone:</strong> Minimum 1500mm width unobstructed (1800mm in busy commercial areas).</li>
+              <li><strong>Vertical Clearance:</strong> 2200mm free of hanging tree branches, signboards, or fixtures.</li>
+              <li><strong>Cross-Slope:</strong> Maximum 1:50 (2%) for drainage without throwing wheelchairs off balance.</li>
+              <li><strong>Surface:</strong> Firm, stable, non-slip (SRV >= 36) in wet and dry conditions.</li>
+            </ul>
+          </div>
+
+          <div class="standard-card">
+            <div class="standard-header">
+              <span class="standard-tag crossing">HG-2021 § 4.2</span>
+              <h3>Kerb Ramps & Crossings</h3>
+            </div>
+            <ul class="standard-rules">
+              <li><strong>Kerb Ramp Slope:</strong> Maximum 1:10 (10%) with flared sides (1:10 slope).</li>
+              <li><strong>Lip Transition:</strong> Flush with road (0mm) or maximum 15mm rounded bevel.</li>
+              <li><strong>Tactile Warning:</strong> 300mm wide band of blister tactile tiles 300mm before roadway edge.</li>
+              <li><strong>Audible Signals:</strong> Beeping sound synchronized with green pedestrian phase.</li>
+            </ul>
+          </div>
+
+          <div class="standard-card">
+            <div class="standard-header">
+              <span class="standard-tag tactile">HG-2021 § 4.5</span>
+              <h3>Tactile Ground Surface Indicators (TGSI)</h3>
+            </div>
+            <ul class="standard-rules">
+              <li><strong>Guiding / Directional:</strong> Flat-topped parallel elongated bars indicating travel direction.</li>
+              <li><strong>Warning / Hazard:</strong> Flat-topped blister studs indicating road crossings, stairs, or platform drops.</li>
+              <li><strong>Contrast:</strong> Minimum 30% luminance contrast against surrounding pavement.</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="standards-evaluator-card">
+          <h4>Interactive Compliance Inspector</h4>
+          <p>Click any feature on the map to evaluate its compliance against the Harmonised Guidelines 2021 thresholds.</p>
+          <button class="primary-button" id="inspect-active-feature-btn">Inspect Selected Feature</button>
+        </div>
+      </section>
+
+      <!-- 5. RESOURCES PANEL -->
+      <section class="panel-view resources-view" id="panel-resources" role="tabpanel" aria-labelledby="tab-resources" hidden>
+        <div class="view-heading">
+          <span class="kicker">THE RESEARCH LIBRARY</span>
+          <h1>Build on the<br><i>right foundations.</i></h1>
+          <p>Official guidance, mapping references, technical tools, and useful precedents for the AccessMap challenge.</p>
+        </div>
+        <div class="resource-filter" role="tablist" aria-label="Filter resources">
+          <button class="resource-filter-button active" data-resource-filter="all" aria-selected="true">All <span>24</span></button>
+          <button class="resource-filter-button" data-resource-filter="policy" aria-selected="false">Policy</button>
+          <button class="resource-filter-button" data-resource-filter="mapping" aria-selected="false">Mapping</button>
+          <button class="resource-filter-button" data-resource-filter="tools" aria-selected="false">Tools</button>
+          <button class="resource-filter-button" data-resource-filter="examples" aria-selected="false">Examples</button>
+        </div>
+        <div class="resource-list">
+          <a data-resource="policy" href="https://divyangjan.depwd.gov.in/upload/uploadfiles/2262.pdf" target="_blank" rel="noreferrer">
+            <small>POLICY · PRIMARY SOURCE</small>
+            <b>Harmonised Guidelines for Universal Accessibility, India 2021</b>
+            <span>MoHUA / DEPwD · PDF ↗</span>
+          </a>
+          <a data-resource="policy" href="https://depwd.gov.in/en/document/harmonised-guidelines-standards-for-universal-accessibility-in-india-2021/" target="_blank" rel="noreferrer">
+            <small>POLICY · OFFICIAL LISTING</small>
+            <b>Guidelines landing page</b>
+            <span>Department of Empowerment of Persons with Disabilities ↗</span>
+          </a>
+          <a data-resource="policy" href="https://ccpd.nic.in/harmonized-guidelines-for-standards-of-accessibility/" target="_blank" rel="noreferrer">
+            <small>POLICY · RIGHTS</small>
+            <b>RPwD Act accessibility sections</b>
+            <span>Chief Commissioner for Persons with Disabilities · Sections 40–46 ↗</span>
+          </a>
+          <a data-resource="policy" href="https://depwd.gov.in/en/accessible-india-campaign/" target="_blank" rel="noreferrer">
+            <small>POLICY · INDIA</small>
+            <b>Accessible India Campaign (Sugamya Bharat)</b>
+            <span>Built environment, transport, and accessible information ↗</span>
+          </a>
+          <a data-resource="policy" href="https://sugamyabharat.gov.in/about.html" target="_blank" rel="noreferrer">
+            <small>POLICY · PRECEDENT</small>
+            <b>Sugamya Bharat App</b>
+            <span>Government crowdsourced accessibility issue reporting ↗</span>
+          </a>
+          <a data-resource="mapping" href="https://wiki.openstreetmap.org/wiki/Key%3Awheelchair" target="_blank" rel="noreferrer">
+            <small>MAPPING · TAGGING</small>
+            <b>OpenStreetMap wheelchair tags</b>
+            <span>Yes, limited, and no conventions; unknown is not yes ↗</span>
+          </a>
+          <a data-resource="mapping" href="https://wiki.openstreetmap.org/wiki/Tag%3Ahighway%3Dsteps" target="_blank" rel="noreferrer">
+            <small>MAPPING · FEATURES</small>
+            <b>Steps, ramps, and handrails</b>
+            <span>OSM tagging reference ↗</span>
+          </a>
+          <a data-resource="mapping" href="https://wiki.openstreetmap.org/wiki/Rollstuhlrouting" target="_blank" rel="noreferrer">
+            <small>MAPPING · ROUTING</small>
+            <b>Wheelchair routing notes</b>
+            <span>Surface, smoothness, width, incline, and kerb ideas ↗</span>
+          </a>
+          <a data-resource="mapping" href="https://sidewalks.washington.edu/wp-content/uploads/2024/06/opensidewalks_mapping_guide.docx.pdf" target="_blank" rel="noreferrer">
+            <small>MAPPING · FIELD GUIDE</small>
+            <b>OpenSidewalks mapping guide</b>
+            <span>University of Washington · PDF ↗</span>
+          </a>
+          <a data-resource="mapping" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">
+            <small>MAPPING · LICENCE</small>
+            <b>OpenStreetMap attribution & ODbL</b>
+            <span>OpenStreetMap Foundation ↗</span>
+          </a>
+          <a data-resource="tools" href="https://osm.gs.mil/product/overpass" target="_blank" rel="noreferrer">
+            <small>TOOLS · DATA QUERY</small>
+            <b>Overpass API</b>
+            <span>Query OSM by area and tags · Try <u>Overpass Turbo</u> ↗</span>
+          </a>
+          <a data-resource="tools" href="https://leafletjs.com/download" target="_blank" rel="noreferrer">
+            <small>TOOLS · INTERACTIVE MAP</small>
+            <b>Leaflet</b>
+            <span>Open-source JavaScript library for interactive maps ↗</span>
+          </a>
+          <a data-resource="tools" href="https://project-osrm.org/docs/v5.24.0/api/" target="_blank" rel="noreferrer">
+            <small>TOOLS · ROUTING ENGINE</small>
+            <b>OSRM routing API</b>
+            <span>Pedestrian profile with custom accessibility weighting ↗</span>
+          </a>
+          <a data-resource="tools" href="https://www.w3.org/TR/WCAG22/" target="_blank" rel="noreferrer">
+            <small>TOOLS · WEB ACCESSIBILITY</small>
+            <b>WCAG 2.2</b>
+            <span>Keyboard, contrast, labels, focus, and content alternatives ↗</span>
+          </a>
+          <a data-resource="tools" href="https://operations.osmfoundation.org/policies/tiles/" target="_blank" rel="noreferrer">
+            <small>TOOLS · MAP TILE POLICY</small>
+            <b>OpenStreetMap tile usage policy</b>
+            <span>Attribution, caching, responsible interactive use, and tile-service limits ↗</span>
+          </a>
+          <a data-resource="tools" href="https://operations.osmfoundation.org/policies/nominatim/" target="_blank" rel="noreferrer">
+            <small>TOOLS · PLACE SEARCH POLICY</small>
+            <b>Nominatim usage policy</b>
+            <span>User-triggered searches only; no client-side autocomplete; maximum one request per second ↗</span>
+          </a>
+          <a data-resource="tools" href="https://maplibre.org/maplibre-gl-js/docs/" target="_blank" rel="noreferrer">
+            <small>TOOLS · MAP RENDERING OPTION</small>
+            <b>MapLibre GL JS</b>
+            <span>Open-source alternative for interactive vector maps ↗</span>
+          </a>
+          <a data-resource="tools" href="https://qgis.org/" target="_blank" rel="noreferrer">
+            <small>TOOLS · DATA INSPECTION</small>
+            <b>QGIS</b>
+            <span>View and clean GeoJSON and geographic data ↗</span>
+          </a>
+          <a data-resource="tools" href="https://josm.openstreetmap.de/" target="_blank" rel="noreferrer">
+            <small>TOOLS · MAP EDITING</small>
+            <b>JOSM</b>
+            <span>Desktop editor for carefully verified OpenStreetMap contributions ↗</span>
+          </a>
+          <a data-resource="tools" href="https://www.openstreetmap.org/edit" target="_blank" rel="noreferrer">
+            <small>TOOLS · MAP EDITING</small>
+            <b>OpenStreetMap iD editor</b>
+            <span>Browser editor for verified map corrections ↗</span>
+          </a>
+          <a data-resource="tools" href="https://openrouteservice.org/dev/" target="_blank" rel="noreferrer">
+            <small>TOOLS · ROUTING OPTION</small>
+            <b>openrouteservice API</b>
+            <span>API-key based directions service; inspect current profiles and limits ↗</span>
+          </a>
+          <a data-resource="examples" href="https://news.wheelmap.org/en/about-wheelmap/" target="_blank" rel="noreferrer">
+            <small>EXAMPLE · COMMUNITY MAP</small>
+            <b>Wheelmap</b>
+            <span>Community ratings for accessible places; not detailed route planning ↗</span>
+          </a>
+          <a data-resource="examples" href="https://senseable.mit.edu/wip/open-walks/" target="_blank" rel="noreferrer">
+            <small>EXAMPLE · RESEARCH</small>
+            <b>Open Walks</b>
+            <span>Crowdsourced sidewalk data and AI-assisted analysis ↗</span>
+          </a>
+          <a data-resource="examples" href="https://support.google.com/maps/answer/6396990?hl=en" target="_blank" rel="noreferrer">
+            <small>EXAMPLE · MAINSTREAM MAP</small>
+            <b>Google Maps accessibility</b>
+            <span>Accessible transit route options and accessibility details ↗</span>
+          </a>
+        </div>
+        <div class="library-note">
+          <b>Local standards matter.</b> OSM wheelchair-routing notes include examples from other jurisdictions. Use India’s Harmonised Guidelines 2021 for local thresholds, and validate them with disabled people and local accessibility groups.
+        </div>
+      </section>
+
+      <!-- 6. ABOUT PANEL -->
+      <section class="panel-view about-view" id="panel-about" role="tabpanel" aria-labelledby="tab-about" hidden>
+        <div class="view-heading">
+          <span class="kicker">ACCESSMAP · IC26-04-04</span>
+          <h1>Access is a<br><i>route detail.</i></h1>
+          <p>The challenge asks for an accessible route map, barrier-report workflow, route filters, confidence labels, and a demonstration on a small mapped area. Suggested ministry alignment: MoHUA / DEPwD.</p>
+        </div>
+        <div class="about-block">
+          <span class="kicker">WHAT WE RECORD</span>
+          <ul>
+            <li>Ramps, steps, kerbs, and crossings (slopes, widths, lip heights)</li>
+            <li>Surface condition, vibration factors, and temporary obstructions</li>
+            <li>Tactile ground surface indicators (TGSI guiding and blister tiles)</li>
+            <li>Accessible entrances, elevators, and transit connections</li>
+            <li>Source, observation date, inspection audit, and photographic evidence</li>
+          </ul>
+        </div>
+        <div class="about-block">
+          <span class="kicker">CONFIDENCE LABELS</span>
+          <div class="confidence-item">
+            <i class="dot high"></i>
+            <div>
+              <b>High Confidence</b>
+              <span>Field-checked by trained auditor with date, physical measurements, and evidence.</span>
+            </div>
+          </div>
+          <div class="confidence-item">
+            <i class="dot medium"></i>
+            <div>
+              <b>Medium Confidence</b>
+              <span>Located user report or multiple consistent community reports, not formally audited.</span>
+            </div>
+          </div>
+          <div class="confidence-item">
+            <i class="dot unknown"></i>
+            <div>
+              <b>Low / Unknown</b>
+              <span>Missing tags, unverified reports, or inferred geometry. Never silently treated as accessible!</span>
+            </div>
+          </div>
+        </div>
+        <div class="about-block">
+          <span class="kicker">DATA RECORD SPECIFICATION</span>
+          <p>Each feature contains geometry, type, observed measurements (slope, width, kerb lip, surface), access status (passable / restricted / blocked / unknown), source, observed_at, updated_at, confidence, moderation state, and evidence notes. An edit date is not an inspection date.</p>
+        </div>
+        <div class="about-block">
+          <span class="kicker">GOVERNMENT & STANDARDS ALIGNMENT</span>
+          <p>Directly aligned with MoHUA’s Harmonised Guidelines for Universal Accessibility 2021, Rights of Persons with Disabilities Act 2016 Sections 40–46, and Sugamya Bharat Abhiyan (Accessible India Campaign).</p>
+        </div>
+      </section>
+    </div>
+  </aside>
+
+  <!-- Interactive Map Shell -->
+  <main class="map-shell" id="map-shell">
+    <div id="map" aria-label="Interactive AccessMap map"></div>
+
+    <!-- Error/Notice Banner -->
+    <div class="map-error-card" id="map-error-card" hidden>
+      <span class="map-error-icon" aria-hidden="true">!</span>
+      <div>
+        <b>Live tile service notice</b>
+        <span>Direct file previews or rate limits may affect public OSM tiles. The platform provides full built-in offline vector layers and local routing for all demo precincts.</span>
+      </div>
+      <button id="dismiss-map-error" aria-label="Dismiss message">×</button>
+    </div>
+
+    <!-- Mobile Panel Toggle -->
+    <button class="mobile-panel-toggle" id="mobile-panel-toggle" aria-label="Open AccessMap side panel">
+      <span aria-hidden="true">☰</span>
+      <b>AccessMap Controls</b>
+    </button>
+
+    <!-- Map Top Floating Actions -->
+    <div class="map-top-actions">
+      <div class="map-status" id="map-status-pill">
+        <span class="status-dot"></span>
+        <span id="map-status">AIIMS Medical & Metro Hub · Verified Accessible Precinct</span>
+      </div>
+      <div class="map-actions-group">
+        <button class="map-action" id="locate-button" title="Locate my position">
+          <span aria-hidden="true">◎</span>
+          <b>My Location</b>
+        </button>
+        <button class="map-action report-action" id="map-report" title="Report an accessibility barrier or update">
+          <span aria-hidden="true">＋</span>
+          <b>Report Barrier</b>
+        </button>
+      </div>
+    </div>
+
+    <!-- Map Legend -->
+    <div class="map-legend" role="region" aria-label="Map legend">
+      <span class="legend-heading">MAP KEY</span>
+      <span><i class="legend-line route-stepfree"></i>Step-free route</span>
+      <span><i class="legend-line route-standard"></i>Standard/Detour</span>
+      <span><i class="legend-dot ramp"></i>Ramp / Lift</span>
+      <span><i class="legend-dot step"></i>Steps</span>
+      <span><i class="legend-dot tactile"></i>Tactile Path</span>
+      <span><i class="legend-dot crossing"></i>Crossing</span>
+      <span><i class="legend-dot community"></i>Barrier Report</span>
+      <small>HG-2021 Field Verified</small>
+    </div>
+
+    <div class="map-credit">
+      AccessMap Prototype · MoHUA Harmonised Guidelines 2021 & RPwD Act 2016 Compliant
+    </div>
+  </main>
+
+  <!-- Barrier Report Dialog -->
+  <dialog id="barrier-dialog" class="report-dialog" aria-labelledby="dialog-title">
+    <button class="dialog-x" id="close-dialog" aria-label="Close dialog">×</button>
+    <span class="kicker">COMMUNITY & AUDIT REPORTING</span>
+    <h2 id="dialog-title">Report a barrier or update</h2>
+    <p>Submit observed accessibility conditions or barriers. Verified reports update the routing engine to protect disabled pedestrians.</p>
+    
+    <form id="barrier-form">
+      <div class="form-row">
+        <label for="barrier-type">Feature Category *</label>
+        <select id="barrier-type" required>
+          <option value="">Select a category</option>
+          <option value="Steps or stairs without ramp">Steps / Stairs without ramp</option>
+          <option value="Steep slope / ramp > 1:12">Steep slope or non-compliant ramp (> 8.3%)</option>
+          <option value="Broken or missing dropped kerb">Broken / Missing dropped kerb (lip > 15mm)</option>
+          <option value="Footpath obstruction / illegal parking">Obstruction / Narrow passage (< 1200mm)</option>
+          <option value="Surface damage or pothole">Rough / Damaged surface or potholes</option>
+          <option value="Missing or damaged tactile paving">Missing / Damaged tactile guiding tiles</option>
+          <option value="Elevator out of service">Elevator / Lift out of service</option>
+          <option value="Construction blockage">Temporary construction blockage</option>
+          <option value="Accessible entrance or new ramp">Newly installed ramp or accessible entrance (Positive update)</option>
+        </select>
+      </div>
+
+      <div class="form-row">
+        <label for="barrier-severity">Passability for Wheelchair / Crutches *</label>
+        <select id="barrier-severity" required>
+          <option value="blocked">Blocked — Completely impassable</option>
+          <option value="restricted">Restricted — Difficult or requires helper</option>
+          <option value="passable_caution">Passable with caution</option>
+          <option value="passable">Fully accessible & compliant</option>
+        </select>
+      </div>
+
+      <div class="form-grid-2">
+        <div>
+          <label for="barrier-measured-slope">Slope / Gradient (% if measured)</label>
+          <input type="number" id="barrier-measured-slope" step="0.1" min="0" max="45" placeholder="e.g. 10.5">
+        </div>
+        <div>
+          <label for="barrier-measured-width">Clear Width (mm if measured)</label>
+          <input type="number" id="barrier-measured-width" step="10" min="200" max="5000" placeholder="e.g. 850">
+        </div>
+      </div>
+
+      <div class="form-row">
+        <label for="barrier-note">Detailed Description *</label>
+        <textarea id="barrier-note" rows="3" maxlength="300" placeholder="Describe the physical barrier, surface condition, or accessibility feature..." required></textarea>
+      </div>
+
+      <div class="form-grid-2">
+        <div>
+          <label for="barrier-confidence">Verification Basis *</label>
+          <select id="barrier-confidence">
+            <option value="Observed by me today">Observed in person today</option>
+            <option value="Formal Accessibility Audit">Formal Accessibility Audit</option>
+            <option value="Reported by someone else">Reported by third-party</option>
+          </select>
+        </div>
+        <div>
+          <label for="barrier-reporter">Reporter Role</label>
+          <select id="barrier-reporter">
+            <option value="Disabled Commuter / Wheelchair User">Disabled Commuter</option>
+            <option value="Accessibility Auditor / MoHUA Inspector">Accessibility Auditor</option>
+            <option value="General Public / Volunteer">General Public</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-actions">
+        <button class="primary-button full-button" type="submit">
+          Save & Submit Barrier Report <span>→</span>
+        </button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Feature Compliance Inspector Modal -->
+  <dialog id="inspector-dialog" class="report-dialog inspector-modal" aria-labelledby="inspector-title">
+    <button class="dialog-x" id="close-inspector-dialog" aria-label="Close dialog">×</button>
+    <span class="kicker">HARMONISED GUIDELINES 2021 AUDIT CHECK</span>
+    <h2 id="inspector-title">Feature Compliance Card</h2>
+    <div id="inspector-content">
+      <!-- Injected by JavaScript -->
+    </div>
+  </dialog>
+
+  <!-- Landmark Quick Pick Dropdown Dialog -->
+  <dialog id="landmark-dialog" class="report-dialog landmark-dialog" aria-labelledby="landmark-title">
+    <button class="dialog-x" id="close-landmark-dialog" aria-label="Close dialog">×</button>
+    <span class="kicker">SELECT VERIFIED POINT</span>
+    <h2 id="landmark-title">Choose Landmark</h2>
+    <div class="landmark-list" id="landmark-list">
+      <!-- Populated by JS -->
+    </div>
+  </dialog>
+
+  <!-- Toast Notification -->
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    if (typeof L === 'undefined') {
+      document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"><\\/script>');
+    }
+  </script>
+  <script src="app.js"></script>
+</body>
+</html>

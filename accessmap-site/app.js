@@ -1,0 +1,1964 @@
+/**
+ * AccessMap — MoHUA Harmonised Guidelines 2021 Compliant
+ * Accessible Route Planning, Barrier Reporting & Moderation Platform
+ * Challenge Reference: IC26-04-04
+ */
+
+// Global state
+let map;
+let mapTiles;
+let currentPrecinctKey = 'aiims';
+let currentMode = 'wheelchair';
+let directFilePreview = location.protocol === 'file:';
+let toastTimer;
+let activeSpeaker = null;
+
+// Route state
+let routePoints = { origin: null, destination: null };
+let routeMarkers = { origin: null, destination: null };
+let activeAccessibleRoute = null;
+let activeStandardRoute = null;
+let lastCalculatedDirections = [];
+let pickMode = null;
+let reportMode = false;
+let pendingReportPoint = null;
+let selectedFeatureForInspection = null;
+
+// Storage keys
+const REPORTS_STORAGE_KEY = 'accessmap_community_reports_v2';
+const AUDITOR_NAME = 'MoHUA National Accessibility Inspector (Auditor #DL-402)';
+
+// Layer Groups
+const layers = {
+  walkways: null,
+  steps: null,
+  ramps: null,
+  crossings: null,
+  tactile: null,
+  places: null,
+  reports: null,
+  routes: null
+};
+
+// ==========================================
+// 1. CURATED SMALL-AREA DEMO PRECINCTS DATA
+// ==========================================
+
+const PRECINCTS = {
+  aiims: {
+    name: 'AIIMS Metro & Hospital Precinct (New Delhi)',
+    center: [28.5674, 77.2092],
+    zoom: 17,
+    description: 'High-density transit and healthcare corridor with metro elevators, footbridges, tactile paths, and entrance ramps.',
+    landmarks: [
+      { id: 'n1', name: 'AIIMS Metro Gate 2 (Elevator & Universal Ramp)', lat: 28.5686, lng: 77.2076, type: 'transit' },
+      { id: 'n2', name: 'AIIMS Metro Gate 1 (Stairs Only - 42 steps barrier)', lat: 28.5684, lng: 77.2079, type: 'transit_stairs' },
+      { id: 'n3', name: 'Aurobindo Marg Pelican Crossing (Dropped Kerb + Audio)', lat: 28.5678, lng: 77.2087, type: 'crossing' },
+      { id: 'n5', name: 'Footbridge Skywalk (East Ramp - Slope 1:14)', lat: 28.5675, lng: 77.2091, type: 'ramp' },
+      { id: 'n6', name: 'Ring Road Footpath (1.8m Tactile Guided Path)', lat: 28.5670, lng: 77.2095, type: 'walkway' },
+      { id: 'n7', name: 'Main OPD Entrance A (Step Barrier - 6 steps)', lat: 28.5663, lng: 77.2104, type: 'entrance_steps' },
+      { id: 'n8', name: 'Main OPD Entrance B (Universal Ramp - Slope 1:15)', lat: 28.5661, lng: 77.2112, type: 'entrance_ramp' },
+      { id: 'n9', name: 'Emergency Ward Approach (Gentle Slope 2.8%)', lat: 28.5654, lng: 77.2107, type: 'entrance' },
+      { id: 'n10', name: 'Central Garden Walkway (Construction Obstruction)', lat: 28.5668, lng: 77.2099, type: 'barrier' }
+    ],
+    // Walkable graph network
+    nodes: {
+      n1: { lat: 28.5686, lng: 77.2076, name: 'Metro Gate 2 (Lift)' },
+      n2: { lat: 28.5684, lng: 77.2079, name: 'Metro Gate 1 (Stairs)' },
+      n3: { lat: 28.5678, lng: 77.2087, name: 'Aurobindo Crossing' },
+      n4: { lat: 28.5677, lng: 77.2083, name: 'Skywalk West Landing' },
+      n5: { lat: 28.5675, lng: 77.2091, name: 'Skywalk East Ramp' },
+      n6: { lat: 28.5670, lng: 77.2095, name: 'Ring Road Junction' },
+      n7: { lat: 28.5663, lng: 77.2104, name: 'OPD Entrance A' },
+      n8: { lat: 28.5661, lng: 77.2112, name: 'OPD Entrance B' },
+      n9: { lat: 28.5654, lng: 77.2107, name: 'Emergency Ward' },
+      n10: { lat: 28.5668, lng: 77.2099, name: 'Central Garden Walkway' }
+    },
+    edges: [
+      // Standard path with stairs: n2 -> n4 (stairs)
+      { from: 'n2', to: 'n4', length: 85, type: 'steps', stepCount: 42, slope: 0.35, width: 2.2, surface: 'granite', handrails: 'dual_sided', name: 'Metro Gate 1 Stairway (42 Steps)' },
+      // Step-free accessible path: n1 -> n4 (elevator + level path)
+      { from: 'n1', to: 'n4', length: 110, type: 'elevator', stepCount: 0, slope: 0.01, width: 1.8, surface: 'concrete', handrails: 'dual_sided', tactile: true, name: 'Metro Gate 2 Accessible Elevator & Concourse' },
+      // Crossing from Skywalk to East side: n4 -> n3
+      { from: 'n4', to: 'n3', length: 65, type: 'crossing', stepCount: 0, slope: 0.02, width: 3.0, surface: 'asphalt', kerbLip: 10, audibleSignal: true, tactile: true, name: 'Pelican Signalized Crossing with Dropped Kerb' },
+      // From crossing to east ramp: n3 -> n5
+      { from: 'n3', to: 'n5', length: 55, type: 'ramp', stepCount: 0, slope: 0.068, width: 1.5, surface: 'concrete', handrails: 'dual_sided', tactile: true, name: 'Universal Skywalk Ramp (Slope 1:15)' },
+      // Direct path from n5 to OPD Entrance A via Central walkway (contains reported barrier n10)
+      { from: 'n5', to: 'n10', length: 90, type: 'walkway', stepCount: 0, slope: 0.02, width: 1.6, surface: 'paved', barrierId: 'b_aiims_1', name: 'Central Garden Path (Active Construction Detour)' },
+      { from: 'n10', to: 'n7', length: 70, type: 'walkway', stepCount: 0, slope: 0.02, width: 1.6, surface: 'paved', name: 'OPD West Pathway' },
+      // Alternate step-free & barrier-avoiding route: n5 -> n6 -> n8
+      { from: 'n5', to: 'n6', length: 80, type: 'tactile_path', stepCount: 0, slope: 0.018, width: 1.8, surface: 'tactile_tile', tactile: true, name: 'Ring Road Footpath with TGSI Guiding Tiles' },
+      { from: 'n6', to: 'n8', length: 120, type: 'ramp', stepCount: 0, slope: 0.062, width: 1.8, surface: 'concrete', handrails: 'dual_sided', tactile: true, name: 'OPD Main Entrance B Ramp (HG-2021 Compliant)' },
+      // OPD Entrance A steps: n7 -> n8
+      { from: 'n7', to: 'n8', length: 60, type: 'steps', stepCount: 6, slope: 0.25, width: 2.0, surface: 'stone', handrails: 'none', name: 'OPD Portico Flight (6 Steps Barrier)' },
+      // OPD B to Emergency: n8 -> n9
+      { from: 'n8', to: 'n9', length: 95, type: 'walkway', stepCount: 0, slope: 0.028, width: 2.0, surface: 'asphalt', tactile: true, name: 'Emergency Access Corridor' }
+    ],
+    features: [
+      {
+        id: 'f_aiims_ramp1', type: 'ramp', lat: 28.5675, lon: 77.2091, title: 'Universal Skywalk Approach Ramp',
+        accessStatus: 'passable', observedValues: { slopePercent: 6.8, slopeRatio: '1:14.7', clearWidthMm: 1500, stepCount: 0, surface: 'brushed_concrete', handrails: 'dual_sided', tactilePaving: true },
+        complianceHG2021: { isCompliant: true, clause: 'HG-2021 § 4.3 (Ramps)', notes: 'Gradient 1:14.7 meets <= 1:12 requirement. Width 1500mm allows two-way wheelchair passing. Dual handrails at 750mm and 900mm.' },
+        source: 'MoHUA Field Audit (DEPwD)', observedAt: '2026-09-12', confidence: 'high', moderationState: 'verified', evidence: { inspector: AUDITOR_NAME, notes: 'Field measured with digital inclinometer and laser tape.' }
+      },
+      {
+        id: 'f_aiims_steps1', type: 'steps', lat: 28.5684, lon: 77.2079, title: 'AIIMS Metro Gate 1 Stair Flight',
+        accessStatus: 'blocked', observedValues: { slopePercent: 35.0, slopeRatio: '1:2.8', clearWidthMm: 2200, stepCount: 42, surface: 'polished_granite', handrails: 'dual_sided', tactilePaving: false },
+        complianceHG2021: { isCompliant: false, clause: 'HG-2021 § 4.4 (Stairs & Steps)', notes: 'Non-accessible for wheelchair/pram users without alternative. Use Gate 2 elevator.' },
+        source: 'MoHUA Field Audit', observedAt: '2026-09-12', confidence: 'high', moderationState: 'verified', evidence: { inspector: AUDITOR_NAME, notes: '42 steps without ramp. Highly slippery when wet.' }
+      },
+      {
+        id: 'f_aiims_cross1', type: 'crossing', lat: 28.5678, lon: 77.2087, title: 'Aurobindo Marg Pelican Crossing',
+        accessStatus: 'passable', observedValues: { slopePercent: 2.0, kerbHeightMm: 10, clearWidthMm: 3000, audibleSignal: true, tactilePaving: true, surface: 'asphalt' },
+        complianceHG2021: { isCompliant: true, clause: 'HG-2021 § 4.2 (Kerb Ramps)', notes: 'Dropped kerb lip is 10mm (<= 15mm limit). Audible pedestrian signal functioning.' },
+        source: 'MoHUA Field Audit', observedAt: '2026-09-15', confidence: 'high', moderationState: 'verified', evidence: { inspector: AUDITOR_NAME, notes: 'Acoustic chirping signal active.' }
+      },
+      {
+        id: 'f_aiims_tactile1', type: 'tactile', lat: 28.5670, lon: 77.2095, title: 'Ring Road TGSI Guiding Path',
+        accessStatus: 'passable', observedValues: { clearWidthMm: 1800, tactilePaving: true, surface: 'directional_tiles', contrastLuminance: '42%' },
+        complianceHG2021: { isCompliant: true, clause: 'HG-2021 § 4.5 (Tactile Indicators)', notes: 'Continuous 300mm directional bar tiles with warning blister studs at turns.' },
+        source: 'MoHUA Field Audit', observedAt: '2026-09-18', confidence: 'high', moderationState: 'verified', evidence: { inspector: AUDITOR_NAME, notes: 'High luminance contrast yellow tiles.' }
+      },
+      {
+        id: 'f_aiims_opd_b', type: 'entrance', lat: 28.5661, lon: 77.2112, title: 'Main OPD Entrance B (Universal Accessible)',
+        accessStatus: 'passable', observedValues: { slopePercent: 6.2, slopeRatio: '1:16', clearWidthMm: 1800, stepCount: 0, automaticDoors: true, tactilePaving: true },
+        complianceHG2021: { isCompliant: true, clause: 'HG-2021 § 5.1 (Building Entrances)', notes: 'Automatic sliding doors, level threshold (lip 0mm), covered porch landing.' },
+        source: 'MoHUA Field Audit', observedAt: '2026-09-20', confidence: 'high', moderationState: 'verified', evidence: { inspector: AUDITOR_NAME, notes: 'Clear opening 1800mm, excellent access.' }
+      }
+    ],
+    defaultReports: [
+      {
+        id: 'b_aiims_1', type: 'Construction blockage', severity: 'restricted', lat: 28.5668, lon: 77.2099,
+        note: 'Scaffolding and paver replacement blocking central pathway. Path narrowed to 650mm with loose gravel rubble.',
+        checked: 'Observed by me today', reporter: 'Disabled Commuter / Wheelchair User',
+        measuredSlope: 4.5, measuredWidth: 650, createdAt: new Date(Date.now() - 86400000 * 2).toISOString(),
+        confidence: 'high', moderationState: 'verified', inspector: AUDITOR_NAME,
+        verifiedAt: new Date(Date.now() - 86400000).toISOString(),
+        evidence: 'Auditor verified: Contractors advised to provide alternate timber ramp detour.'
+      },
+      {
+        id: 'b_aiims_2', type: 'Steps or stairs without ramp', severity: 'blocked', lat: 28.5663, lon: 77.2104,
+        note: 'Main OPD Entrance A has 6 steep stone steps with no ramp or handrail. Directs all wheelchair users to Entrance B.',
+        checked: 'Formal Accessibility Audit', reporter: 'Accessibility Auditor / MoHUA Inspector',
+        measuredSlope: 25.0, measuredWidth: 2000, createdAt: new Date(Date.now() - 86400000 * 5).toISOString(),
+        confidence: 'high', moderationState: 'verified', inspector: AUDITOR_NAME,
+        verifiedAt: new Date(Date.now() - 86400000 * 4).toISOString(),
+        evidence: 'Photographed during Joint DEPwD Hospital Accessibility Review.'
+      },
+      {
+        id: 'b_aiims_3', type: 'Broken or missing dropped kerb', severity: 'restricted', lat: 28.5672, lon: 77.2084,
+        note: 'Damaged dropped kerb at pharmacy corner has 45mm vertical lip. Causes wheelchair tip hazard.',
+        checked: 'Observed by me today', reporter: 'General Public / Volunteer',
+        measuredSlope: 14.0, measuredWidth: 1100, createdAt: new Date(Date.now() - 86400000 * 1).toISOString(),
+        confidence: 'medium', moderationState: 'pending',
+        evidence: 'Citizen report pending site re-inspection.'
+      }
+    ]
+  },
+
+  iitd: {
+    name: 'IIT Delhi Campus & Academic Precinct',
+    center: [28.5450, 77.1925],
+    zoom: 17,
+    description: 'Premier university campus with ramped academic complexes, accessible library, and student mobility corridors.',
+    landmarks: [
+      { id: 'i1', name: 'IIT Main Gate (Tactile Paved Security Concourse)', lat: 28.5462, lng: 77.1910, type: 'entrance' },
+      { id: 'i2', name: 'Main Administrative Building (Universal South Ramp)', lat: 28.5453, lng: 77.1922, type: 'ramp' },
+      { id: 'i3', name: 'Senate Hall Portico (Flight of 18 Steps)', lat: 28.5451, lng: 77.1928, type: 'steps' },
+      { id: 'i4', name: 'Central Library (Dedicated Accessible Ground Lift)', lat: 28.5442, lng: 77.1932, type: 'elevator' },
+      { id: 'i5', name: 'Lecture Hall Complex (Tactile Path Approach)', lat: 28.5435, lng: 77.1918, type: 'tactile' }
+    ],
+    nodes: {
+      i1: { lat: 28.5462, lng: 77.1910, name: 'Main Gate' },
+      i2: { lat: 28.5453, lng: 77.1922, name: 'Admin Building Ramp' },
+      i3: { lat: 28.5451, lng: 77.1928, name: 'Senate Hall Steps' },
+      i4: { lat: 28.5442, lng: 77.1932, name: 'Central Library Lift' },
+      i5: { lat: 28.5435, lng: 77.1918, name: 'Lecture Hall Complex' },
+      i_mid: { lat: 28.5447, lng: 77.1920, name: 'Central Quadrangle' }
+    },
+    edges: [
+      { from: 'i1', to: 'i2', length: 140, type: 'ramp', stepCount: 0, slope: 0.055, width: 2.0, surface: 'concrete', handrails: 'dual_sided', tactile: true, name: 'Main Gate to Admin Ramp Corridor' },
+      { from: 'i2', to: 'i3', length: 70, type: 'steps', stepCount: 18, slope: 0.30, width: 2.4, surface: 'granite', handrails: 'single_sided', name: 'Senate Hall Front Flight (18 Steps)' },
+      { from: 'i2', to: 'i_mid', length: 80, type: 'tactile_path', stepCount: 0, slope: 0.02, width: 1.8, surface: 'tactile_tile', tactile: true, name: 'Quadrangle Accessible Walkway' },
+      { from: 'i_mid', to: 'i4', length: 110, type: 'elevator', stepCount: 0, slope: 0.015, width: 1.8, surface: 'paved', handrails: 'dual_sided', tactile: true, name: 'Central Library Accessible Lift Connector' },
+      { from: 'i_mid', to: 'i5', length: 130, type: 'walkway', stepCount: 0, slope: 0.025, width: 2.0, surface: 'paved', tactile: true, name: 'Lecture Hall Avenue' }
+    ],
+    features: [
+      {
+        id: 'f_iit_ramp', type: 'ramp', lat: 28.5453, lon: 77.1922, title: 'Main Admin Building South Ramp',
+        accessStatus: 'passable', observedValues: { slopePercent: 5.5, slopeRatio: '1:18.2', clearWidthMm: 2000, stepCount: 0, handrails: 'dual_sided', tactilePaving: true },
+        complianceHG2021: { isCompliant: true, clause: 'HG-2021 § 4.3 (Ramps)', notes: 'Exceptional gentle gradient (1:18). Compliant dual handrails and resting landing.' },
+        source: 'Campus Accessibility Audit', observedAt: '2026-08-10', confidence: 'high', moderationState: 'verified', evidence: { inspector: 'IITD Accessibility Cell', notes: 'Built under Accessible India Campaign.' }
+      },
+      {
+        id: 'f_iit_steps', type: 'steps', lat: 28.5451, lon: 77.1928, title: 'Senate Hall Entrance Flight',
+        accessStatus: 'blocked', observedValues: { slopePercent: 30.0, stepCount: 18, clearWidthMm: 2400, handrails: 'single_sided' },
+        complianceHG2021: { isCompliant: false, clause: 'HG-2021 § 4.4', notes: 'Stair barrier without adjacent ramp. Use rear elevator.' },
+        source: 'Campus Audit', observedAt: '2026-08-10', confidence: 'high', moderationState: 'verified', evidence: { inspector: 'IITD Cell', notes: '18 steps.' }
+      }
+    ],
+    defaultReports: [
+      {
+        id: 'b_iit_1', type: 'Surface damage or pothole', severity: 'restricted', lat: 28.5448, lon: 77.1923,
+        note: 'Paver tiles uprooted by tree roots near quadrangle. Wheelchairs experience severe vibration.',
+        checked: 'Observed by me today', reporter: 'Disabled Commuter / Wheelchair User',
+        measuredSlope: 5.0, measuredWidth: 1000, createdAt: new Date(Date.now() - 86400000 * 3).toISOString(),
+        confidence: 'high', moderationState: 'verified', inspector: AUDITOR_NAME,
+        evidence: 'Works department notified for leveling.'
+      }
+    ]
+  },
+
+  mgroad: {
+    name: 'Bengaluru MG Road & Metro Transit Hub',
+    center: [12.9756, 77.6095],
+    zoom: 17,
+    description: 'High-volume commercial precinct with pedestrianised boulevard, metro transit elevators, and dropped kerb crossings.',
+    landmarks: [
+      { id: 'm1', name: 'MG Road Metro Station (Boulevard Concourse Lift)', lat: 12.9758, lng: 77.6085, type: 'elevator' },
+      { id: 'm2', name: 'Church Street Pedestrianised Plaza (Level Paved)', lat: 12.9749, lng: 77.6092, type: 'walkway' },
+      { id: 'm3', name: 'Brigade Road Signalized Pelican Crossing', lat: 12.9742, lng: 77.6078, type: 'crossing' },
+      { id: 'm4', name: 'Public Utility Building Ramp', lat: 12.9751, lng: 77.6105, type: 'ramp' }
+    ],
+    nodes: {
+      m1: { lat: 12.9758, lng: 77.6085, name: 'Metro Concourse Lift' },
+      m2: { lat: 12.9749, lng: 77.6092, name: 'Church Street Plaza' },
+      m3: { lat: 12.9742, lng: 77.6078, name: 'Brigade Rd Crossing' },
+      m4: { lat: 12.9751, lng: 77.6105, name: 'Public Utility Bldg' }
+    },
+    edges: [
+      { from: 'm1', to: 'm2', length: 120, type: 'walkway', stepCount: 0, slope: 0.015, width: 2.5, surface: 'granite_cobble', tactile: true, name: 'Metro to Church Street Boulevard' },
+      { from: 'm2', to: 'm3', length: 150, type: 'crossing', stepCount: 0, slope: 0.02, width: 3.5, surface: 'asphalt', kerbLip: 8, audibleSignal: true, tactile: true, name: 'Church St to Brigade Rd Pelican Crossing' },
+      { from: 'm2', to: 'm4', length: 140, type: 'ramp', stepCount: 0, slope: 0.07, width: 1.6, surface: 'concrete', handrails: 'dual_sided', name: 'Church St to Utility Building Ramp' }
+    ],
+    features: [
+      {
+        id: 'f_mg_lift', type: 'ramp', lat: 12.9758, lon: 77.6085, title: 'MG Road Metro Concourse Elevator',
+        accessStatus: 'passable', observedValues: { clearWidthMm: 1200, automaticDoors: true, audioAnnouncements: true, brailleButtons: true },
+        complianceHG2021: { isCompliant: true, clause: 'HG-2021 § 4.6 (Lifts)', notes: 'Braille buttons, audio chimes, wide 1200mm door opening.' },
+        source: 'BMRCL Accessibility Audit', observedAt: '2026-07-15', confidence: 'high', moderationState: 'verified', evidence: { inspector: 'BMRCL Team', notes: 'Audited transit facility.' }
+      }
+    ],
+    defaultReports: [
+      {
+        id: 'b_mg_1', type: 'Footpath obstruction / illegal parking', severity: 'restricted', lat: 12.9753, lon: 77.6089,
+        note: 'Electric utility box and two-wheelers parked on footpath reducing clear width to 700mm.',
+        checked: 'Observed by me today', reporter: 'Disabled Commuter / Wheelchair User',
+        measuredSlope: 2.0, measuredWidth: 700, createdAt: new Date(Date.now() - 86400000 * 2).toISOString(),
+        confidence: 'high', moderationState: 'verified', inspector: AUDITOR_NAME,
+        evidence: 'Reported to BBMP for clearance.'
+      }
+    ]
+  }
+};
+
+// ==========================================
+// 2. REPORT STORAGE & MODERATION CYCLE
+// ==========================================
+
+function getStoredReports() {
+  try {
+    const raw = localStorage.getItem(REPORTS_STORAGE_KEY);
+    if (!raw) {
+      const initial = [
+        ...PRECINCTS.aiims.defaultReports,
+        ...PRECINCTS.iitd.defaultReports,
+        ...PRECINCTS.mgroad.defaultReports
+      ];
+      localStorage.setItem(REPORTS_STORAGE_KEY, JSON.stringify(initial));
+      return initial;
+    }
+    return JSON.parse(raw);
+  } catch (err) {
+    console.error('Error loading reports:', err);
+    return [];
+  }
+}
+
+function saveStoredReports(reports) {
+  try {
+    localStorage.setItem(REPORTS_STORAGE_KEY, JSON.stringify(reports));
+    updateReportCountsAndBadges();
+    renderReportsLayer();
+    renderModerationList();
+  } catch (err) {
+    console.error('Error saving reports:', err);
+  }
+}
+
+function resetReportsToDemo() {
+  const initial = [
+    ...PRECINCTS.aiims.defaultReports,
+    ...PRECINCTS.iitd.defaultReports,
+    ...PRECINCTS.mgroad.defaultReports
+  ];
+  saveStoredReports(initial);
+  showToast('Demo reports reset to official verified baseline.');
+}
+
+// Active barrier set for routing calculations
+function getActiveBarrierIds() {
+  const reports = getStoredReports();
+  const activeIds = new Set();
+  reports.forEach(r => {
+    // Only barriers that are not resolved or rejected penalize routes
+    if (r.moderationState !== 'resolved' && r.moderationState !== 'rejected') {
+      activeIds.add(r.id);
+    }
+  });
+  return activeIds;
+}
+
+// ==========================================
+// 3. MAP INITIALIZATION & OFFLINE RESILIENCE
+// ==========================================
+
+function ensureLeafletLoaded() {
+  if (typeof L !== 'undefined') return true;
+
+  console.warn('Leaflet library is not available. Activating AccessMap Offline Vector Engine.');
+
+  // Lightweight Leaflet API shim
+  window.L = {
+    map: function(id) {
+      const container = document.getElementById(id);
+      if (container) {
+        container.innerHTML = `
+          <div id="offline-svg-map-wrapper" style="width:100%;height:100%;position:relative;background:#e9ece5;overflow:hidden;">
+            <svg id="offline-svg-map" style="width:100%;height:100%;position:absolute;inset:0;" viewBox="0 0 1000 700"></svg>
+            <div id="offline-popup-container" style="position:absolute;z-index:20;display:none;padding:12px;border-radius:6px;background:#fff;box-shadow:0 6px 20px rgba(0,0,0,0.15);max-width:280px;font-size:11px;"></div>
+            <div style="position:absolute;bottom:8px;left:12px;background:#ffffffd0;padding:3px 8px;border-radius:4px;font-size:10px;color:#475569;font-weight:600;z-index:10;">
+              AccessMap Offline Vector Engine (Active)
+            </div>
+          </div>
+        `;
+      }
+      return {
+        setView: function() { return this; },
+        fitBounds: function() { return this; },
+        flyTo: function() { return this; },
+        getZoom: function() { return 17; },
+        getBounds: function() {
+          return {
+            getSouth: () => 28.56, getWest: () => 77.20, getNorth: () => 28.57, getEast: () => 77.22,
+            pad: () => this
+          };
+        },
+        removeLayer: function() {},
+        addLayer: function() {},
+        on: function(evt, fn) {
+          const wrapper = document.getElementById('offline-svg-map-wrapper');
+          if (evt === 'click' && wrapper) {
+            wrapper.addEventListener('click', (e) => {
+              if (e.target.closest('#offline-popup-container') || e.target.closest('circle')) return;
+              const rect = wrapper.getBoundingClientRect();
+              const x = e.clientX - rect.left;
+              const y = e.clientY - rect.top;
+              const lat = 28.5674 + (0.5 - y / rect.height) * 0.0035;
+              const lng = 77.2092 + (x / rect.width - 0.5) * 0.0045;
+              fn({ latlng: { lat, lng } });
+            });
+          }
+        },
+        invalidateSize: function() {}
+      };
+    },
+    layerGroup: function() {
+      const items = [];
+      return {
+        clearLayers: function() {
+          items.forEach(it => it.remove && it.remove());
+          items.length = 0;
+        },
+        addLayer: function(l) { items.push(l); },
+        removeLayer: function(l) {
+          const idx = items.indexOf(l);
+          if (idx !== -1) {
+            items[idx].remove && items[idx].remove();
+            items.splice(idx, 1);
+          }
+        },
+        addTo: function() { return this; }
+      };
+    },
+    latLng: function(lat, lng) { return { lat: Number(lat), lng: Number(lng) }; },
+    latLngBounds: function() { return { pad: () => this }; },
+    divIcon: function(opts) { return opts; },
+    marker: function(latlng, opts) {
+      const svg = document.getElementById('offline-svg-map');
+      let circle = null;
+      let popupContent = '';
+      if (svg) {
+        circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        const cx = 500 + (latlng.lng - 77.2092) * 120000;
+        const cy = 350 - (latlng.lat - 28.5674) * 120000;
+        circle.setAttribute('cx', Math.max(50, Math.min(950, cx)));
+        circle.setAttribute('cy', Math.max(50, Math.min(650, cy)));
+        circle.setAttribute('r', '9');
+        circle.setAttribute('fill', opts?.icon?.className?.includes('report') ? '#ef4444' : '#10b981');
+        circle.setAttribute('stroke', '#ffffff');
+        circle.setAttribute('stroke-width', '2.5');
+        circle.style.cursor = 'pointer';
+        circle.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const pop = document.getElementById('offline-popup-container');
+          if (pop && popupContent) {
+            pop.innerHTML = popupContent + `<div style="text-align:right;margin-top:6px;"><button onclick="this.parentElement.parentElement.style.display='none'" style="border:0;background:#eee;padding:2px 6px;border-radius:3px;cursor:pointer;">Close</button></div>`;
+            pop.style.left = `${Math.min(window.innerWidth - 300, e.clientX - 100)}px`;
+            pop.style.top = `${Math.max(20, e.clientY - 120)}px`;
+            pop.style.display = 'block';
+          }
+        });
+        svg.appendChild(circle);
+      }
+      return {
+        addTo: function(group) { group && group.addLayer && group.addLayer(this); return this; },
+        bindPopup: function(c) { popupContent = c; return this; },
+        openPopup: function() { return this; },
+        on: function() { return this; },
+        getLatLng: function() { return latlng; },
+        remove: function() { circle && circle.remove(); }
+      };
+    },
+    polyline: function(coords, opts) {
+      const svg = document.getElementById('offline-svg-map');
+      let poly = null;
+      if (svg && coords.length >= 2) {
+        poly = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+        const pointsStr = coords.map(c => {
+          const lat = c.lat !== undefined ? c.lat : c[0];
+          const lng = c.lng !== undefined ? c.lng : c[1];
+          const x = 500 + (lng - 77.2092) * 120000;
+          const y = 350 - (lat - 28.5674) * 120000;
+          return `${Math.max(30, Math.min(970, x))},${Math.max(30, Math.min(670, y))}`;
+        }).join(' ');
+        poly.setAttribute('points', pointsStr);
+        poly.setAttribute('fill', 'none');
+        poly.setAttribute('stroke', opts?.color || '#10b981');
+        poly.setAttribute('stroke-width', opts?.weight ? String(opts.weight * 1.2) : '5');
+        if (opts?.dashArray) poly.setAttribute('stroke-dasharray', opts.dashArray);
+        poly.setAttribute('stroke-linecap', 'round');
+        poly.setAttribute('stroke-linejoin', 'round');
+        svg.insertBefore(poly, svg.firstChild);
+      }
+      return {
+        addTo: function(group) { group && group.addLayer && group.addLayer(this); return this; },
+        bindPopup: function() { return this; },
+        getBounds: function() { return { pad: () => this }; },
+        remove: function() { poly && poly.remove(); }
+      };
+    },
+    geoJSON: function(data, opts) {
+      return this.polyline([], opts);
+    },
+    circleMarker: function(latlng) {
+      return this.marker(latlng, {});
+    },
+    control: {
+      zoom: function() { return { addTo: function() {} }; }
+    },
+    tileLayer: function() {
+      return {
+        addTo: function() { return this; },
+        on: function() {}
+      };
+    },
+    popup: function() {
+      return {
+        setLatLng: function() { return this; },
+        setContent: function() { return this; },
+        openOn: function() { return this; }
+      };
+    }
+  };
+  return false;
+}
+
+function initMap() {
+  ensureLeafletLoaded();
+  const precinct = PRECINCTS[currentPrecinctKey];
+  map = L.map('map', {
+    zoomControl: false,
+    preferCanvas: true
+  }).setView(precinct.center, precinct.zoom);
+
+  L.control.zoom({ position: 'bottomright' }).addTo(map);
+
+  // Initialize Layer Groups
+  layers.walkways = L.layerGroup().addTo(map);
+  layers.steps = L.layerGroup().addTo(map);
+  layers.ramps = L.layerGroup().addTo(map);
+  layers.crossings = L.layerGroup().addTo(map);
+  layers.tactile = L.layerGroup().addTo(map);
+  layers.places = L.layerGroup().addTo(map);
+  layers.reports = L.layerGroup().addTo(map);
+  layers.routes = L.layerGroup().addTo(map);
+
+  // Tile layer configuration
+  if (directFilePreview) {
+    // Direct file preview fallback with informative notice
+    document.querySelector('#map-status').textContent = 'Precinct mode · Full offline routing & vector data active';
+    setupTileLayerWithFallback();
+  } else {
+    setupTileLayerWithFallback();
+  }
+
+  // Map Event Listeners
+  map.on('click', onMapClick);
+
+  // Load active precinct
+  loadPrecinct(currentPrecinctKey);
+}
+
+function setupTileLayerWithFallback() {
+  mapTiles = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors · MoHUA Guidelines'
+  }).addTo(map);
+
+  let tileErrorCount = 0;
+  mapTiles.on('tileerror', () => {
+    tileErrorCount += 1;
+    if (tileErrorCount >= 4) {
+      document.querySelector('#map-error-card').hidden = false;
+    }
+  });
+  mapTiles.on('tileload', () => {
+    tileErrorCount = Math.max(0, tileErrorCount - 1);
+    if (tileErrorCount < 2) {
+      document.querySelector('#map-error-card').hidden = true;
+    }
+  });
+}
+
+function loadPrecinct(key) {
+  currentPrecinctKey = key;
+  const precinct = PRECINCTS[key];
+  if (!precinct) return;
+
+  // Clear existing layers
+  Object.values(layers).forEach(group => group && group.clearLayers());
+  clearRoute();
+
+  // Center map
+  map.setView(precinct.center, precinct.zoom);
+  setMapStatus(`${precinct.name} · Verified Accessible Precinct`);
+
+  // Render Network Walkways
+  renderNetworkWalkways(precinct);
+
+  // Render Features
+  renderPrecinctFeatures(precinct);
+
+  // Render Reports
+  renderReportsLayer();
+
+  // Update lists and counts
+  updateCategoryCounts();
+  renderFeatureList();
+  renderModerationList();
+  updateReportCountsAndBadges();
+
+  showToast(`Loaded ${precinct.name}`);
+}
+
+// ==========================================
+// 4. MAP LAYERS & FEATURE RENDERING
+// ==========================================
+
+function pinIcon(kind, glyph) {
+  return L.divIcon({
+    className: 'map-pip',
+    html: `<div class="pin-shape pin-${kind}"><span>${glyph}</span></div>`,
+    iconSize: [28, 34],
+    iconAnchor: [14, 31],
+    popupAnchor: [0, -28]
+  });
+}
+
+function renderNetworkWalkways(precinct) {
+  layers.walkways.clearLayers();
+  if (!precinct.edges || !precinct.nodes) return;
+
+  const activeBarriers = getActiveBarrierIds();
+
+  precinct.edges.forEach(edge => {
+    const fromNode = precinct.nodes[edge.from];
+    const toNode = precinct.nodes[edge.to];
+    if (!fromNode || !toNode) return;
+
+    let color = '#10b981'; // green accessible
+    let dashArray = null;
+    let weight = 5;
+    let opacity = 0.85;
+
+    const isBlocked = edge.barrierId && activeBarriers.has(edge.barrierId);
+
+    if (isBlocked) {
+      color = '#ef4444'; // red blocked
+      dashArray = '6 6';
+    } else if (edge.type === 'steps' || edge.stepCount > 0) {
+      color = '#a8734d'; // brown steps
+      dashArray = '4 4';
+      weight = 4;
+    } else if (edge.type === 'tactile_path' || edge.tactile) {
+      color = '#8b5cf6'; // purple tactile
+      weight = 5;
+    } else if (edge.type === 'ramp') {
+      color = '#059669'; // deep green ramp
+      weight = 6;
+    } else if (edge.type === 'crossing') {
+      color = '#3b82f6'; // blue crossing
+      dashArray = '3 5';
+    }
+
+    const polyline = L.polyline([[fromNode.lat, fromNode.lng], [toNode.lat, toNode.lng]], {
+      color: color,
+      weight: weight,
+      opacity: opacity,
+      dashArray: dashArray,
+      lineCap: 'round',
+      lineJoin: 'round'
+    }).addTo(layers.walkways);
+
+    const complianceText = edge.stepCount > 0 ? '❌ Inaccessible (Stair Barrier)' : '✓ HG-2021 Step-Free';
+    const detail = `
+      <div class="popup-kicker">${escapeHtml(edge.type.toUpperCase())} · ${complianceText}</div>
+      <div class="popup-title">${escapeHtml(edge.name)}</div>
+      <div class="popup-detail">
+        Length: ${edge.length}m · Slope: ${(edge.slope * 100).toFixed(1)}% · Width: ${edge.width}m
+        ${edge.stepCount ? `<br><b>Steps count: ${edge.stepCount}</b>` : ''}
+        ${edge.handrails ? `<br>Handrails: ${edge.handrails}` : ''}
+        ${isBlocked ? '<br><b style="color:#b91c1c;">⚠️ Active barrier reported on this segment</b>' : ''}
+      </div>
+    `;
+    polyline.bindPopup(detail);
+  });
+}
+
+function renderPrecinctFeatures(precinct) {
+  if (!precinct.features) return;
+
+  precinct.features.forEach(feature => {
+    let kind = 'places';
+    let glyph = '♿';
+
+    if (feature.type === 'ramp') { kind = 'ramp'; glyph = '↗'; }
+    else if (feature.type === 'steps') { kind = 'steps'; glyph = '↟'; }
+    else if (feature.type === 'crossing') { kind = 'crossing'; glyph = '╱'; }
+    else if (feature.type === 'tactile') { kind = 'tactile'; glyph = '⠶'; }
+
+    const marker = L.marker([feature.lat, feature.lon], {
+      icon: pinIcon(kind, glyph)
+    });
+
+    const isPassable = feature.accessStatus === 'passable';
+    const statusText = isPassable ? 'PASSABLE · HG-2021 COMPLIANT' : 'BARRIER · RESTRICTED';
+    const detail = `
+      <div class="popup-kicker">${statusText}</div>
+      <div class="popup-title">${escapeHtml(feature.title)}</div>
+      <div class="popup-detail">
+        <b>Audit Source:</b> ${escapeHtml(feature.source)} (${feature.observedAt})<br>
+        <b>Compliance:</b> ${escapeHtml(feature.complianceHG2021.notes)}<br>
+        <button class="primary-button" style="height:26px;font-size:9px;margin-top:6px;width:100%;" onclick="openInspectorModal('${feature.id}')">
+          View HG-2021 Compliance Card ↗
+        </button>
+      </div>
+    `;
+
+    marker.bindPopup(detail);
+
+    // Add to specific layer group
+    if (feature.type === 'ramp' && layers.ramps) marker.addTo(layers.ramps);
+    else if (feature.type === 'steps' && layers.steps) marker.addTo(layers.steps);
+    else if (feature.type === 'crossing' && layers.crossings) marker.addTo(layers.crossings);
+    else if (feature.type === 'tactile' && layers.tactile) marker.addTo(layers.tactile);
+    else if (layers.places) marker.addTo(layers.places);
+
+    feature.marker = marker;
+  });
+}
+
+function renderReportsLayer() {
+  layers.reports.clearLayers();
+  const reports = getStoredReports();
+
+  reports.forEach(report => {
+    let glyph = '!';
+    let kind = 'report';
+    if (report.severity === 'blocked') kind = 'barrier';
+
+    const marker = L.marker([report.lat, report.lon], {
+      icon: pinIcon(kind, glyph)
+    });
+
+    const statusBadge = report.moderationState === 'verified'
+      ? '<span style="color:#15803d;font-weight:700;">✓ AUDITOR VERIFIED</span>'
+      : report.moderationState === 'resolved'
+      ? '<span style="color:#2563eb;font-weight:700;">✓ BARRIER RESOLVED</span>'
+      : '<span style="color:#b45309;font-weight:700;">⏳ PENDING AUDIT</span>';
+
+    const detail = `
+      <div class="popup-kicker">COMMUNITY REPORT · ${statusBadge}</div>
+      <div class="popup-title">${escapeHtml(report.type)}</div>
+      <div class="popup-detail">
+        ${escapeHtml(report.note)}<br>
+        <b>Passability:</b> ${report.severity.toUpperCase()}<br>
+        <b>Verification:</b> ${escapeHtml(report.checked)}<br>
+        <b>Reported by:</b> ${escapeHtml(report.reporter || 'Citizen')}<br>
+        <small>Date: ${new Date(report.createdAt).toLocaleDateString()}</small><br>
+        ${report.inspector ? `<small>Auditor: ${escapeHtml(report.inspector)}</small><br>` : ''}
+        <button class="secondary-button" style="height:26px;font-size:9px;margin-top:6px;width:100%;" onclick="switchPanel('moderation')">
+          Manage in Moderation Desk →
+        </button>
+      </div>
+    `;
+
+    marker.bindPopup(detail);
+    marker.addTo(layers.reports);
+    report.marker = marker;
+  });
+}
+
+function updateCategoryCounts() {
+  const precinct = PRECINCTS[currentPrecinctKey];
+  const features = precinct ? precinct.features || [] : [];
+  const reports = getStoredReports();
+
+  let countSteps = 0, countRamps = 0, countCrossings = 0, countTactile = 0, countPlaces = 0;
+
+  features.forEach(f => {
+    if (f.type === 'steps') countSteps++;
+    else if (f.type === 'ramp') countRamps++;
+    else if (f.type === 'crossing') countCrossings++;
+    else if (f.type === 'tactile') countTactile++;
+    else countPlaces++;
+  });
+
+  document.querySelector('#count-steps').textContent = countSteps;
+  document.querySelector('#count-ramps').textContent = countRamps;
+  document.querySelector('#count-crossings').textContent = countCrossings;
+  document.querySelector('#count-tactile').textContent = countTactile;
+  document.querySelector('#count-places').textContent = countPlaces;
+  document.querySelector('#report-count').textContent = reports.length;
+}
+
+function updateReportCountsAndBadges() {
+  const reports = getStoredReports();
+  let pending = 0, verified = 0, resolved = 0;
+
+  reports.forEach(r => {
+    if (r.moderationState === 'verified') verified++;
+    else if (r.moderationState === 'resolved') resolved++;
+    else if (r.moderationState === 'pending') pending++;
+  });
+
+  const badge = document.querySelector('#moderation-count-badge');
+  badge.textContent = pending;
+  badge.style.display = pending > 0 ? 'inline-block' : 'none';
+
+  document.querySelector('#mod-stat-pending').textContent = pending;
+  document.querySelector('#mod-stat-verified').textContent = verified;
+  document.querySelector('#mod-stat-resolved').textContent = resolved;
+  document.querySelector('#mod-stat-total').textContent = reports.length;
+}
+
+function renderFeatureList() {
+  const list = document.querySelector('#feature-list');
+  const precinct = PRECINCTS[currentPrecinctKey];
+  const features = precinct ? precinct.features || [] : [];
+  const reports = getStoredReports();
+
+  list.innerHTML = '';
+  const totalCount = features.length + reports.length;
+  if (!totalCount) {
+    list.innerHTML = '<div class="tiny-note">No features loaded for this view.</div>';
+    return;
+  }
+
+  list.innerHTML = `<div class="feature-list-heading">${totalCount} AUDITED INFRASTRUCTURE ITEMS</div>`;
+
+  features.forEach(f => {
+    const row = document.createElement('button');
+    row.className = 'feature-row';
+    const isPass = f.accessStatus === 'passable';
+    row.innerHTML = `
+      <div class="feature-row-top">
+        <b>${escapeHtml(f.title)}</b>
+        <span class="conf-pill ${f.confidence}">${f.confidence.toUpperCase()} CONF</span>
+      </div>
+      <span>${escapeHtml(f.complianceHG2021.clause)} · ${isPass ? 'Compliant' : 'Non-compliant'}</span>
+    `;
+    row.addEventListener('click', () => {
+      map.flyTo([f.lat, f.lon], 18, { duration: 0.5 });
+      if (f.marker) setTimeout(() => f.marker.openPopup(), 520);
+    });
+    list.appendChild(row);
+  });
+}
+
+// ==========================================
+// 5. GRAPH-BASED ACCESSIBILITY ROUTING (A*)
+// ==========================================
+
+function findNearestNode(latlng, nodes) {
+  let nearestId = null;
+  let minDistance = Infinity;
+
+  Object.entries(nodes).forEach(([id, node]) => {
+    const dist = Math.hypot(node.lat - latlng.lat, node.lng - latlng.lng);
+    if (dist < minDistance) {
+      minDistance = dist;
+      nearestId = id;
+    }
+  });
+
+  return nearestId;
+}
+
+function computeGraphRoute(startNodeId, targetNodeId, mode, precinct, prefs) {
+  const nodes = precinct.nodes;
+  const edges = precinct.edges;
+  const activeBarriers = getActiveBarrierIds();
+
+  // Build Adjacency List
+  const adj = {};
+  Object.keys(nodes).forEach(id => { adj[id] = []; });
+
+  edges.forEach(edge => {
+    // Check barrier avoidance
+    const isBlocked = edge.barrierId && activeBarriers.has(edge.barrierId);
+    let edgeCost = edge.length;
+
+    if (prefs.avoidBarriers && isBlocked) {
+      edgeCost = Infinity; // strictly blocked
+    }
+
+    if (mode === 'wheelchair') {
+      if (prefs.avoidStairs && (edge.type === 'steps' || edge.stepCount > 0)) {
+        edgeCost = Infinity;
+      }
+      if (edge.slope > prefs.maxSlope) {
+        edgeCost += (edge.slope - prefs.maxSlope) * 1500;
+      }
+      if (prefs.smoothOnly && (edge.surface === 'gravel' || edge.surface === 'uneven')) {
+        edgeCost *= 4;
+      }
+      if (edge.width < prefs.minWidth) {
+        edgeCost += (prefs.minWidth - edge.width) * 500;
+      }
+      if (edge.type === 'ramp') edgeCost *= 0.85;
+      if (edge.type === 'elevator') edgeCost *= 0.75;
+    } else if (mode === 'tactile') {
+      if (edge.tactile || edge.type === 'tactile_path') edgeCost *= 0.5; // strongly preferred
+      if (edge.type === 'crossing' && edge.audibleSignal) edgeCost *= 0.6;
+      if (edge.type === 'steps' && !edge.tactileWarning) edgeCost *= 2.5;
+    } else if (mode === 'assisted') {
+      if (edge.type === 'steps') edgeCost += edge.stepCount * 20;
+      if (edge.slope > 0.05) edgeCost *= 2.5;
+    } else {
+      // standard walk - purely distance based
+      edgeCost = edge.length;
+    }
+
+    adj[edge.from].push({ to: edge.to, cost: edgeCost, edgeData: edge });
+    adj[edge.to].push({ to: edge.from, cost: edgeCost, edgeData: edge });
+  });
+
+  // Dijkstra / A* Search
+  const distances = {};
+  const previous = {};
+  const previousEdge = {};
+  const unvisited = new Set(Object.keys(nodes));
+
+  Object.keys(nodes).forEach(id => { distances[id] = Infinity; });
+  distances[startNodeId] = 0;
+
+  while (unvisited.size > 0) {
+    let current = null;
+    let lowestDistance = Infinity;
+
+    unvisited.forEach(id => {
+      if (distances[id] < lowestDistance) {
+        lowestDistance = distances[id];
+        current = id;
+      }
+    });
+
+    if (current === null || lowestDistance === Infinity || current === targetNodeId) break;
+
+    unvisited.delete(current);
+
+    adj[current].forEach(neighbor => {
+      if (!unvisited.has(neighbor.to)) return;
+      const alt = distances[current] + neighbor.cost;
+      if (alt < distances[neighbor.to]) {
+        distances[neighbor.to] = alt;
+        previous[neighbor.to] = current;
+        previousEdge[neighbor.to] = neighbor.edgeData;
+      }
+    });
+  }
+
+  // Reconstruct path
+  if (distances[targetNodeId] === Infinity) return null;
+
+  const path = [];
+  const edgeList = [];
+  let curr = targetNodeId;
+
+  while (curr !== startNodeId) {
+    path.unshift(nodes[curr]);
+    edgeList.unshift(previousEdge[curr]);
+    curr = previous[curr];
+    if (!curr) break;
+  }
+  path.unshift(nodes[startNodeId]);
+
+  return {
+    pathCoordinates: path.map(n => [n.lat, n.lng]),
+    edges: edgeList,
+    totalDistance: edgeList.reduce((acc, e) => acc + e.length, 0),
+    totalSteps: edgeList.reduce((acc, e) => acc + (e.stepCount || 0), 0),
+    maxSlope: Math.max(...edgeList.map(e => e.slope || 0)),
+    mode: mode
+  };
+}
+
+async function findAccessibleRoute() {
+  if (!routePoints.origin || !routePoints.destination) return;
+
+  const button = document.querySelector('#route-submit');
+  const resultBox = document.querySelector('#route-result');
+  button.disabled = true;
+  button.innerHTML = '<span>◌</span> Computing optimal accessible route…';
+
+  const precinct = PRECINCTS[currentPrecinctKey];
+  const prefs = {
+    avoidStairs: document.querySelector('#pref-avoid-stairs').checked,
+    avoidBarriers: document.querySelector('#pref-avoid-barriers').checked,
+    smoothOnly: document.querySelector('#pref-smooth-only').checked,
+    maxSlope: parseFloat(document.querySelector('#pref-max-slope').value),
+    minWidth: parseFloat(document.querySelector('#pref-min-width').value)
+  };
+
+  try {
+    if (precinct && precinct.nodes) {
+      // Local Graph Routing (Offline Ready & Field-Verified)
+      const startId = findNearestNode(routePoints.origin, precinct.nodes);
+      const targetId = findNearestNode(routePoints.destination, precinct.nodes);
+
+      if (startId === targetId) {
+        throw new Error('Origin and destination are at the same location. Please choose distinct points.');
+      }
+
+      // Compute Accessible Route
+      const accessibleResult = computeGraphRoute(startId, targetId, currentMode, precinct, prefs);
+      if (!accessibleResult) {
+        throw new Error('No accessible path found under current strict constraints. Try adjusting slope or barrier settings.');
+      }
+
+      // Compute Standard Baseline Route (for comparison)
+      const standardPrefs = { avoidStairs: false, avoidBarriers: false, smoothOnly: false, maxSlope: 1.0, minWidth: 0.1 };
+      const standardResult = computeGraphRoute(startId, targetId, 'standard', precinct, standardPrefs);
+
+      // Render Routes on Map
+      renderRouteResult(accessibleResult, standardResult);
+
+      // Generate Accessible Turn-by-Turn Directions
+      generateDirectionsList(accessibleResult, standardResult);
+
+      showToast('Accessible route computed with HG-2021 validation.');
+    } else {
+      // Fallback to Live OSRM walking route
+      await fetchLiveOSRMRoute();
+    }
+  } catch (error) {
+    resultBox.innerHTML = `<div style="color:#b91c1c;font-weight:700;">${escapeHtml(error.message)}</div>`;
+    resultBox.hidden = false;
+    showToast(error.message);
+  } finally {
+    button.innerHTML = '<span>↗</span> Find Accessible Route';
+    button.disabled = !(routePoints.origin && routePoints.destination);
+    document.querySelector('#route-compare-btn').disabled = !activeAccessibleRoute;
+  }
+}
+
+function renderRouteResult(accessible, standard) {
+  layers.routes.clearLayers();
+
+  // 1. Render Standard Route (if available and different)
+  if (standard && standard.totalDistance !== accessible.totalDistance) {
+    activeStandardRoute = L.polyline(standard.pathCoordinates, {
+      color: '#94a3b8',
+      weight: 5,
+      opacity: 0.7,
+      dashArray: '6 8',
+      lineCap: 'round',
+      lineJoin: 'round'
+    }).addTo(layers.routes);
+    activeStandardRoute.bindPopup(`<b>Standard Direct Route</b><br>${standard.totalDistance}m · Includes ${standard.totalSteps} stairs / barriers`);
+  }
+
+  // 2. Render Accessible Route (Outer glow + solid emerald line)
+  const outerGlow = L.polyline(accessible.pathCoordinates, {
+    color: '#ffffff',
+    weight: 9,
+    opacity: 0.95,
+    lineCap: 'round',
+    lineJoin: 'round'
+  }).addTo(layers.routes);
+
+  activeAccessibleRoute = L.polyline(accessible.pathCoordinates, {
+    color: '#10b981',
+    weight: 5,
+    opacity: 1,
+    lineCap: 'round',
+    lineJoin: 'round'
+  }).addTo(layers.routes);
+
+  map.fitBounds(activeAccessibleRoute.getBounds().pad(0.2));
+
+  // 3. Compute Metrics
+  const rollTimeMin = Math.max(1, Math.round(accessible.totalDistance / 55)); // ~3.3 km/h wheelchair roll speed
+  const stairsAvoided = Math.max(0, (standard ? standard.totalSteps : 0) - accessible.totalSteps);
+  const maxSlopePercent = (accessible.maxSlope * 100).toFixed(1);
+
+  // Render Result Box
+  const resultBox = document.querySelector('#route-result');
+  resultBox.hidden = false;
+  resultBox.innerHTML = `
+    <div class="result-header">
+      <div>
+        <span class="kicker">ACCESSIBLE ROUTE COMPUTED</span>
+        <div class="result-route-title">${accessible.totalDistance}m · ~${rollTimeMin} min roll</div>
+      </div>
+      <span class="result-compliance-badge">100% Step-Free</span>
+    </div>
+
+    <div class="result-metrics-grid">
+      <div class="metric-box">
+        <b>${stairsAvoided}</b>
+        <span>Stairs Avoided</span>
+      </div>
+      <div class="metric-box">
+        <b>${maxSlopePercent}%</b>
+        <span>Max Gradient</span>
+      </div>
+      <div class="metric-box">
+        <b>HG-2021</b>
+        <span>MoHUA Compliant</span>
+      </div>
+    </div>
+
+    ${stairsAvoided > 0 ? `
+      <div class="result-comparison-banner">
+        ⚠️ <b>Barrier Protection:</b> The standard path contains <b>${stairsAvoided} stairs/steps</b>. This route detour guides you safely via universal ramps and dropped kerbs.
+      </div>
+    ` : ''}
+
+    <button class="result-view-directions-btn" onclick="switchPanel('directions')">
+      View Turn-by-Turn Guidance →
+    </button>
+  `;
+
+  // Update Directions Badge
+  document.querySelector('#directions-badge').hidden = false;
+  document.querySelector('#metric-dist').textContent = `${accessible.totalDistance}m`;
+  document.querySelector('#metric-time').textContent = `${rollTimeMin} min`;
+  document.querySelector('#metric-stairs-avoided').textContent = `${stairsAvoided}`;
+  document.querySelector('#metric-compliance').textContent = `100%`;
+}
+
+async function fetchLiveOSRMRoute() {
+  const a = routePoints.origin;
+  const b = routePoints.destination;
+  const url = `https://routing.openstreetmap.de/routed-foot/route/v1/foot/${a.lng},${a.lat};${b.lng},${b.lat}?overview=full&geometries=geojson&steps=true`;
+
+  const response = await fetch(url);
+  if (!response.ok) throw new Error('Live walking route service is currently unavailable.');
+  const data = await response.json();
+  if (data.code !== 'Ok' || !data.routes?.length) throw new Error('No pedestrian route found.');
+
+  const route = data.routes[0];
+  layers.routes.clearLayers();
+
+  activeAccessibleRoute = L.geoJSON(route.geometry, {
+    style: { color: '#10b981', weight: 5, opacity: 1, lineCap: 'round', lineJoin: 'round' }
+  }).addTo(layers.routes);
+
+  map.fitBounds(activeAccessibleRoute.getBounds().pad(0.15));
+
+  const distM = Math.round(route.distance);
+  const timeMin = Math.max(1, Math.round(route.duration / 60));
+
+  const resultBox = document.querySelector('#route-result');
+  resultBox.hidden = false;
+  resultBox.innerHTML = `
+    <div class="result-header">
+      <div>
+        <span class="kicker">LIVE PEDESTRIAN PREVIEW</span>
+        <div class="result-route-title">${distM}m · ~${timeMin} min</div>
+      </div>
+      <span class="result-compliance-badge">Live OSM</span>
+    </div>
+    <div class="tiny-note" style="margin-top:6px;text-align:left;">
+      Note: Global OSM live walking profile does not guarantee full wheelchair compliance outside verified demo areas. Check local kerbs and crossings.
+    </div>
+    <button class="result-view-directions-btn" style="margin-top:10px;" onclick="switchPanel('directions')">
+      View Directions →
+    </button>
+  `;
+}
+
+// ==========================================
+// 6. TURN-BY-TURN ACCESSIBLE DIRECTIONS
+// ==========================================
+
+function generateDirectionsList(accessible, standard) {
+  const container = document.querySelector('#directions-steplist');
+  container.innerHTML = '';
+  lastCalculatedDirections = [];
+
+  if (!accessible || !accessible.edges || !accessible.edges.length) {
+    container.innerHTML = '<div class="empty-directions-notice">No directions available.</div>';
+    return;
+  }
+
+  accessible.edges.forEach((edge, index) => {
+    let icon = '🚶';
+    let alertText = null;
+
+    if (edge.type === 'ramp') icon = '↗';
+    else if (edge.type === 'elevator') icon = '🛗';
+    else if (edge.type === 'crossing') icon = '╱';
+    else if (edge.type === 'tactile_path') icon = '🦯';
+    else if (edge.type === 'steps') { icon = '↟'; alertText = 'Warning: Contains steps'; }
+
+    const slopeInfo = edge.slope ? `Gradient: ${(edge.slope * 100).toFixed(1)}%` : 'Level surface';
+    const widthInfo = edge.width ? `Clear width: ${edge.width}m` : '';
+    const surfaceInfo = edge.surface ? `Surface: ${edge.surface}` : '';
+
+    const instruction = `Step ${index + 1}: Follow ${edge.name} for ${edge.length}m`;
+    const details = [slopeInfo, widthInfo, surfaceInfo].filter(Boolean).join(' · ');
+
+    lastCalculatedDirections.push({
+      step: index + 1,
+      instruction: instruction,
+      details: details,
+      alert: alertText
+    });
+
+    const stepEl = document.createElement('div');
+    stepEl.className = 'step-item';
+    stepEl.innerHTML = `
+      <div class="step-node-dot"></div>
+      <div class="step-icon-box">${icon}</div>
+      <div class="step-content">
+        <div class="step-instruction">${escapeHtml(instruction)}</div>
+        <div class="step-detail">${escapeHtml(details)}</div>
+        ${alertText ? `<div class="step-alert">${escapeHtml(alertText)}</div>` : ''}
+      </div>
+    `;
+    container.appendChild(stepEl);
+  });
+}
+
+function speakDirectionsAloud() {
+  if (!('speechSynthesis' in window)) {
+    showToast('Text-to-speech audio is not supported in this browser.');
+    return;
+  }
+
+  if (window.speechSynthesis.speaking) {
+    window.speechSynthesis.cancel();
+    document.querySelector('#speak-directions-btn').innerHTML = '<span>🔊</span> Read Aloud';
+    showToast('Audio readout stopped.');
+    return;
+  }
+
+  if (!lastCalculatedDirections.length) {
+    showToast('Plan a route first before starting audio readout.');
+    return;
+  }
+
+  const scriptText = lastCalculatedDirections.map(d => `${d.instruction}. ${d.details}.`).join(' ');
+  const utterance = new SpeechSynthesisUtterance(`Starting accessible navigation guidance. ${scriptText} You have arrived at your destination.`);
+  utterance.rate = 0.95;
+  utterance.pitch = 1.0;
+
+  utterance.onstart = () => {
+    document.querySelector('#speak-directions-btn').innerHTML = '<span>⏹</span> Stop Audio';
+  };
+  utterance.onend = () => {
+    document.querySelector('#speak-directions-btn').innerHTML = '<span>🔊</span> Read Aloud';
+  };
+  utterance.onerror = () => {
+    document.querySelector('#speak-directions-btn').innerHTML = '<span>🔊</span> Read Aloud';
+  };
+
+  window.speechSynthesis.speak(utterance);
+}
+
+// ==========================================
+// 7. AUDITS & MODERATION DASHBOARD
+// ==========================================
+
+function renderModerationList(filter = 'all') {
+  const container = document.querySelector('#moderation-list');
+  if (!container) return;
+
+  const reports = getStoredReports();
+  container.innerHTML = '';
+
+  const filtered = reports.filter(r => {
+    if (filter === 'all') return true;
+    return r.moderationState === filter;
+  });
+
+  if (!filtered.length) {
+    container.innerHTML = `<div class="tiny-note" style="padding:20px;">No records match filter "${filter}".</div>`;
+    return;
+  }
+
+  filtered.forEach(report => {
+    const card = document.createElement('div');
+    card.className = 'mod-card';
+
+    const slopeText = report.measuredSlope ? `Slope: ${report.measuredSlope}%` : 'Slope: Unmeasured';
+    const widthText = report.measuredWidth ? `Width: ${report.measuredWidth}mm` : 'Width: Standard';
+
+    card.innerHTML = `
+      <div class="mod-card-header">
+        <span class="mod-card-title">${escapeHtml(report.type)}</span>
+        <span class="mod-status-tag ${report.moderationState}">${report.moderationState}</span>
+      </div>
+      <div class="mod-note">${escapeHtml(report.note)}</div>
+      <div class="mod-metrics-row">
+        <span>${slopeText}</span>
+        <span>${widthText}</span>
+        <span>${report.severity.toUpperCase()}</span>
+      </div>
+      <div style="font-size:9px;color:var(--muted);margin-bottom:8px;">
+        Reported: ${new Date(report.createdAt).toLocaleDateString()} · ${escapeHtml(report.reporter || 'Public')}
+        ${report.inspector ? `<br><b>Audited by:</b> ${escapeHtml(report.inspector)}` : ''}
+      </div>
+      <div class="mod-actions-row">
+        <button class="mod-btn verify" onclick="verifyReport('${report.id}')">✓ Verify Report</button>
+        <button class="mod-btn resolve" onclick="resolveReport('${report.id}')">⚙ Mark Resolved</button>
+        <button class="mod-btn reject" onclick="rejectReport('${report.id}')">✕ Reject</button>
+      </div>
+    `;
+
+    container.appendChild(card);
+  });
+}
+
+function verifyReport(reportId) {
+  const reports = getStoredReports();
+  const report = reports.find(r => r.id === reportId);
+  if (!report) return;
+
+  report.moderationState = 'verified';
+  report.confidence = 'high';
+  report.inspector = AUDITOR_NAME;
+  report.verifiedAt = new Date().toISOString();
+
+  saveStoredReports(reports);
+  showToast('Report verified by MoHUA Auditor and published to routing engine.');
+}
+
+function resolveReport(reportId) {
+  const reports = getStoredReports();
+  const report = reports.find(r => r.id === reportId);
+  if (!report) return;
+
+  report.moderationState = 'resolved';
+  report.resolvedAt = new Date().toISOString();
+
+  saveStoredReports(reports);
+
+  // Recalculate route if active
+  if (routePoints.origin && routePoints.destination) {
+    findAccessibleRoute();
+  }
+
+  showToast('Barrier marked as resolved. Pathways dynamically cleared!');
+}
+
+function rejectReport(reportId) {
+  const reports = getStoredReports();
+  const index = reports.findIndex(r => r.id === reportId);
+  if (index === -1) return;
+
+  reports[index].moderationState = 'rejected';
+  saveStoredReports(reports);
+  showToast('Report rejected by auditor.');
+}
+
+function exportReportsGeoJSON() {
+  const reports = getStoredReports();
+  const geojson = {
+    type: 'FeatureCollection',
+    features: reports.map(r => ({
+      type: 'Feature',
+      geometry: { type: 'Point', coordinates: [r.lon, r.lat] },
+      properties: { ...r }
+    }))
+  };
+
+  downloadFile('accessmap_mohua_barrier_audit.geojson', JSON.stringify(geojson, null, 2), 'application/geo+json');
+}
+
+function exportReportsCSV() {
+  const reports = getStoredReports();
+  const headers = ['ID', 'Type', 'Severity', 'Latitude', 'Longitude', 'SlopePercent', 'ClearWidthMm', 'Confidence', 'ModerationState', 'CreatedAt', 'Inspector'];
+  const rows = reports.map(r => [
+    r.id,
+    `"${r.type}"`,
+    r.severity,
+    r.lat,
+    r.lon,
+    r.measuredSlope || '',
+    r.measuredWidth || '',
+    r.confidence,
+    r.moderationState,
+    r.createdAt,
+    `"${r.inspector || ''}"`
+  ]);
+
+  const csvContent = [headers.join(','), ...rows.map(row => row.join(','))].join('\n');
+  downloadFile('accessmap_barrier_records.csv', csvContent, 'text/csv');
+}
+
+function downloadFile(filename, content, type) {
+  const blob = new Blob([content], { type: type });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+// ==========================================
+// 8. INSPECTOR & COMPLIANCE MODAL
+// ==========================================
+
+function openInspectorModal(featureId) {
+  const precinct = PRECINCTS[currentPrecinctKey];
+  const feature = precinct.features.find(f => f.id === featureId);
+  if (!feature) return;
+
+  const content = document.querySelector('#inspector-content');
+  const isCompliant = feature.complianceHG2021.isCompliant;
+  const statusClass = isCompliant ? 'pass' : 'fail';
+  const statusText = isCompliant ? 'Compliant with HG-2021' : 'Non-Compliant Barrier';
+
+  const vals = feature.observedValues || {};
+
+  content.innerHTML = `
+    <div class="inspector-card-body">
+      <div class="inspector-badge-row">
+        <span class="inspector-clause-tag">${escapeHtml(feature.complianceHG2021.clause)}</span>
+        <span class="inspector-status-badge ${statusClass}">${statusText}</span>
+      </div>
+
+      <h3 style="margin:0 0 10px;font-size:14px;color:var(--forest);">${escapeHtml(feature.title)}</h3>
+
+      <table class="inspector-table">
+        <tr><th>Audit Parameter</th><th>Observed Value</th><th>HG-2021 Standard</th></tr>
+        ${vals.slopePercent ? `<tr><td>Gradient / Slope</td><td><b>${vals.slopePercent}% (${vals.slopeRatio})</b></td><td>Max 1:12 (8.33%)</td></tr>` : ''}
+        ${vals.clearWidthMm ? `<tr><td>Clear Width</td><td><b>${vals.clearWidthMm} mm</b></td><td>Min 1200mm / 1500mm</td></tr>` : ''}
+        ${vals.stepCount !== undefined ? `<tr><td>Step Count</td><td><b>${vals.stepCount} steps</b></td><td>0 (Step-free)</td></tr>` : ''}
+        ${vals.kerbHeightMm ? `<tr><td>Kerb Lip</td><td><b>${vals.kerbHeightMm} mm</b></td><td>Max 15mm bevel</td></tr>` : ''}
+        ${vals.handrails ? `<tr><td>Handrails</td><td><b>${vals.handrails}</b></td><td>Dual 750mm & 900mm</td></tr>` : ''}
+        ${vals.surface ? `<tr><td>Surface Material</td><td><b>${vals.surface}</b></td><td>Firm, stable, non-slip</td></tr>` : ''}
+      </table>
+
+      <div style="background:var(--surface-alt);padding:10px;border-radius:4px;font-size:11px;margin-bottom:12px;">
+        <b>Auditor Assessment:</b><br>${escapeHtml(feature.complianceHG2021.notes)}
+      </div>
+
+      <div style="font-size:10px;color:var(--muted);">
+        Audited by: ${escapeHtml(feature.evidence?.inspector || 'MoHUA National Accessibility Inspector')} · Observation Date: ${feature.observedAt}
+      </div>
+    </div>
+  `;
+
+  document.querySelector('#inspector-dialog').showModal();
+}
+
+// ==========================================
+// 9. MAP INTERACTIONS & PICKING
+// ==========================================
+
+function onMapClick(e) {
+  if (pickMode) {
+    setRoutePoint(pickMode, e.latlng);
+    return;
+  }
+
+  if (reportMode) {
+    pendingReportPoint = e.latlng;
+    reportMode = false;
+    document.querySelector('#report-mode').classList.remove('armed');
+    document.querySelector('#map-report').classList.remove('armed');
+    document.querySelector('#barrier-dialog').showModal();
+  }
+}
+
+function setRoutePoint(type, latlng, label = null) {
+  routePoints[type] = latlng;
+
+  if (routeMarkers[type]) {
+    map.removeLayer(routeMarkers[type]);
+  }
+
+  const isOrigin = type === 'origin';
+  const marker = L.marker(latlng, {
+    icon: pinIcon(type, isOrigin ? 'A' : 'B'),
+    draggable: true
+  }).addTo(map);
+
+  marker.on('dragend', ev => {
+    routePoints[type] = ev.target.getLatLng();
+    updateRouteButtons();
+  });
+
+  routeMarkers[type] = marker;
+
+  const btn = document.querySelector(`#${type}-pick`);
+  btn.textContent = label || `${latlng.lat.toFixed(5)}, ${latlng.lng.toFixed(5)}`;
+  btn.classList.add('chosen');
+  btn.parentElement.classList.remove('picking');
+
+  pickMode = null;
+  updateRouteButtons();
+
+  if (routePoints.origin && routePoints.destination) {
+    map.fitBounds(L.latLngBounds(routePoints.origin, routePoints.destination).pad(0.3));
+    findAccessibleRoute();
+  }
+}
+
+function clearRoute() {
+  Object.values(routeMarkers).forEach(m => m && map.removeLayer(m));
+  routeMarkers = { origin: null, destination: null };
+  routePoints = { origin: null, destination: null };
+
+  layers.routes.clearLayers();
+  activeAccessibleRoute = null;
+  activeStandardRoute = null;
+
+  document.querySelectorAll('.pick-button').forEach((b, i) => {
+    b.textContent = i === 0 ? 'Choose starting point on map' : 'Choose destination on map';
+    b.classList.remove('chosen');
+  });
+
+  document.querySelector('#route-result').hidden = true;
+  document.querySelector('#directions-badge').hidden = true;
+  document.querySelector('#directions-steplist').innerHTML = '<div class="empty-directions-notice">Select route points to view directions.</div>';
+
+  updateRouteButtons();
+}
+
+function updateRouteButtons() {
+  const ready = !!(routePoints.origin && routePoints.destination);
+  document.querySelector('#route-submit').disabled = !ready;
+  document.querySelector('#clear-route').hidden = !(routePoints.origin || routePoints.destination);
+}
+
+function openLandmarkPickerDialog(targetType) {
+  const precinct = PRECINCTS[currentPrecinctKey];
+  const list = document.querySelector('#landmark-list');
+  list.innerHTML = '';
+
+  if (!precinct.landmarks || !precinct.landmarks.length) {
+    list.innerHTML = '<div class="tiny-note">No landmarks for this precinct.</div>';
+    return;
+  }
+
+  precinct.landmarks.forEach(lm => {
+    const btn = document.createElement('button');
+    btn.className = 'landmark-item-btn';
+    btn.innerHTML = `<b>${escapeHtml(lm.name)}</b><span>Select</span>`;
+    btn.addEventListener('click', () => {
+      setRoutePoint(targetType, L.latLng(lm.lat, lm.lng), lm.name);
+      document.querySelector('#landmark-dialog').close();
+    });
+    list.appendChild(btn);
+  });
+
+  document.querySelector('#landmark-dialog').showModal();
+}
+
+// ==========================================
+// 10. SEARCH & GEOCODING
+// ==========================================
+
+async function searchPlace() {
+  const input = document.querySelector('#place-search');
+  const query = input.value.trim().toLowerCase();
+  if (!query) return;
+
+  const submit = document.querySelector('#search-submit');
+  submit.disabled = true;
+  submit.textContent = '…';
+
+  // Check local landmarks first
+  const precinct = PRECINCTS[currentPrecinctKey];
+  const matched = precinct.landmarks?.find(l => l.name.toLowerCase().includes(query));
+
+  if (matched) {
+    map.flyTo([matched.lat, matched.lng], 18, { duration: 0.5 });
+    L.popup().setLatLng([matched.lat, matched.lng])
+      .setContent(`<div class="popup-title">${escapeHtml(matched.name)}</div><div class="popup-detail">Verified precinct landmark</div>`)
+      .openOn(map);
+    showToast(`Found: ${matched.name}`);
+    submit.disabled = false;
+    submit.textContent = '↵';
+    return;
+  }
+
+  // Fallback to online Nominatim
+  if (directFilePreview) {
+    showToast('Direct file mode: searched local precinct landmarks.');
+    submit.disabled = false;
+    submit.textContent = '↵';
+    return;
+  }
+
+  try {
+    const url = new URL('https://nominatim.openstreetmap.org/search');
+    url.search = new URLSearchParams({ q: query, format: 'jsonv2', limit: '1', addressdetails: '1', 'accept-language': 'en' });
+    const response = await fetch(url);
+    if (!response.ok) throw new Error('Search service rate limit reached.');
+    const places = await response.json();
+    if (!places.length) throw new Error('No place found for that search.');
+
+    const place = places[0];
+    const center = [Number(place.lat), Number(place.lon)];
+    map.setView(center, Math.max(16, map.getZoom()));
+    L.popup().setLatLng(center)
+      .setContent(`<div class="popup-title">${escapeHtml(place.display_name)}</div>`)
+      .openOn(map);
+    showToast(`Found: ${place.display_name.split(',')[0]}`);
+  } catch (err) {
+    showToast(err.message);
+  } finally {
+    submit.disabled = false;
+    submit.textContent = '↵';
+  }
+}
+
+// ==========================================
+// 11. NAVIGATION & PANEL SWITCHING
+// ==========================================
+
+function switchPanel(name) {
+  document.querySelectorAll('.sidebar-tab').forEach(tab => {
+    const active = tab.dataset.panel === name;
+    tab.classList.toggle('active', active);
+    tab.setAttribute('aria-selected', String(active));
+  });
+
+  document.querySelectorAll('.panel-view').forEach(view => {
+    const active = view.id === `panel-${name}`;
+    view.classList.toggle('active', active);
+    view.hidden = !active;
+  });
+
+  document.querySelector('#panel-scroll-container').scrollTop = 0;
+  document.querySelector('#sidebar').classList.add('mobile-open');
+
+  setTimeout(() => map && map.invalidateSize(), 260);
+}
+
+function showToast(message) {
+  const toast = document.querySelector('#toast');
+  toast.textContent = message;
+  toast.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toast.classList.remove('show'), 3400);
+}
+
+function setMapStatus(msg) {
+  document.querySelector('#map-status').textContent = msg;
+}
+
+function escapeHtml(value) {
+  return String(value || '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+}
+
+// ==========================================
+// 12. EVENT LISTENERS & DOM SETUP
+// ==========================================
+
+document.addEventListener('DOMContentLoaded', () => {
+  initMap();
+
+  // Precinct Switcher
+  document.querySelector('#precinct-select').addEventListener('change', e => {
+    loadPrecinct(e.target.value);
+  });
+
+  // Quick Scenarios
+  document.querySelector('#scenario-stairs-vs-ramp').addEventListener('click', () => {
+    loadPrecinct('aiims');
+    const p = PRECINCTS.aiims;
+    setRoutePoint('origin', L.latLng(p.nodes.n1.lat, p.nodes.n1.lng), 'Metro Gate 2 (Lift)');
+    setRoutePoint('destination', L.latLng(p.nodes.n8.lat, p.nodes.n8.lng), 'Main OPD Entrance B');
+  });
+
+  document.querySelector('#scenario-barrier-detour').addEventListener('click', () => {
+    loadPrecinct('aiims');
+    const p = PRECINCTS.aiims;
+    setRoutePoint('origin', L.latLng(p.nodes.n5.lat, p.nodes.n5.lng), 'Skywalk East Landing');
+    setRoutePoint('destination', L.latLng(p.nodes.n7.lat, p.nodes.n7.lng), 'OPD Entrance A');
+  });
+
+  // Route Mode Selector
+  document.querySelectorAll('.mode-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.mode-btn').forEach(b => {
+        b.classList.remove('active');
+        b.setAttribute('aria-checked', 'false');
+      });
+      btn.classList.add('active');
+      btn.setAttribute('aria-checked', 'true');
+      currentMode = btn.dataset.mode;
+
+      if (routePoints.origin && routePoints.destination) {
+        findAccessibleRoute();
+      }
+    });
+  });
+
+  // Pick Mode buttons
+  document.querySelectorAll('.pick-button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      pickMode = btn.dataset.pick;
+      document.querySelectorAll('.route-line').forEach(l => l.classList.remove('picking'));
+      btn.parentElement.classList.add('picking');
+      setMapStatus(`Click map to choose ${pickMode === 'origin' ? 'starting point' : 'destination'}`);
+      if (window.innerWidth <= 820) document.querySelector('#sidebar').classList.remove('mobile-open');
+    });
+  });
+
+  // Landmark dropdown pickers
+  document.querySelectorAll('.landmark-pick-btn').forEach(btn => {
+    btn.addEventListener('click', () => openLandmarkPickerDialog(btn.dataset.target));
+  });
+
+  // Swap Points button
+  document.querySelector('#swap-route-points').addEventListener('click', () => {
+    if (!routePoints.origin || !routePoints.destination) return;
+    const tempPt = routePoints.origin;
+    const tempName = document.querySelector('#origin-pick').textContent;
+    setRoutePoint('origin', routePoints.destination, document.querySelector('#destination-pick').textContent);
+    setRoutePoint('destination', tempPt, tempName);
+  });
+
+  // Clear route
+  document.querySelector('#clear-route').addEventListener('click', clearRoute);
+
+  // Submit route
+  document.querySelector('#route-submit').addEventListener('click', findAccessibleRoute);
+  document.querySelector('#route-compare-btn').addEventListener('click', findAccessibleRoute);
+
+  // Search
+  document.querySelector('#search-submit').addEventListener('click', searchPlace);
+  document.querySelector('#place-search').addEventListener('keydown', e => { if (e.key === 'Enter') searchPlace(); });
+
+  // Quick search tags
+  document.querySelectorAll('.quick-tag').forEach(tag => {
+    tag.addEventListener('click', () => {
+      document.querySelector('#place-search').value = tag.dataset.query;
+      searchPlace();
+    });
+  });
+
+  // Tabs
+  document.querySelectorAll('.sidebar-tab').forEach(tab => {
+    tab.addEventListener('click', () => switchPanel(tab.dataset.panel));
+  });
+  document.querySelector('#open-resource-tab').addEventListener('click', () => switchPanel('standards'));
+  document.querySelector('#directions-back-btn').addEventListener('click', () => switchPanel('explore'));
+
+  // Mobile drawer controls
+  document.querySelector('#mobile-panel-toggle').addEventListener('click', () => {
+    document.querySelector('#sidebar').classList.add('mobile-open');
+    setTimeout(() => map.invalidateSize(), 260);
+  });
+  document.querySelector('#mobile-close').addEventListener('click', () => {
+    document.querySelector('#sidebar').classList.remove('mobile-open');
+  });
+  document.querySelector('#collapse-sidebar').addEventListener('click', () => {
+    const col = document.querySelector('#sidebar').classList.toggle('collapsed');
+    setTimeout(() => map.invalidateSize(), 260);
+  });
+
+  // Accessibility Toggles: Contrast & Font Size
+  document.querySelector('#toggle-contrast').addEventListener('click', () => {
+    const isHC = document.body.classList.toggle('theme-high-contrast');
+    showToast(isHC ? 'High Contrast Mode Enabled (WCAG AAA)' : 'Standard Theme Active');
+  });
+
+  document.querySelector('#toggle-font-size').addEventListener('click', () => {
+    if (document.body.classList.contains('font-normal')) {
+      document.body.classList.remove('font-normal');
+      document.body.classList.add('font-large');
+      showToast('Font Size: Large');
+    } else if (document.body.classList.contains('font-large')) {
+      document.body.classList.remove('font-large');
+      document.body.classList.add('font-xl');
+      showToast('Font Size: Extra Large');
+    } else {
+      document.body.classList.remove('font-xl');
+      document.body.classList.add('font-normal');
+      showToast('Font Size: Standard');
+    }
+  });
+
+  // Speech readout
+  document.querySelector('#speak-directions-btn').addEventListener('click', speakDirectionsAloud);
+
+  // Print route sheet
+  document.querySelector('#print-route-btn').addEventListener('click', () => window.print());
+
+  // Export GeoJSON Route
+  document.querySelector('#export-geojson-route-btn').addEventListener('click', () => {
+    if (!activeAccessibleRoute) { showToast('No route to export.'); return; }
+    downloadFile('accessible_route.geojson', JSON.stringify(activeAccessibleRoute.toGeoJSON(), null, 2), 'application/geo+json');
+  });
+
+  // Barrier Report Actions
+  function toggleReportArm() {
+    reportMode = !reportMode;
+    document.querySelector('#report-mode').classList.toggle('armed', reportMode);
+    document.querySelector('#map-report').classList.toggle('armed', reportMode);
+    if (reportMode) {
+      pickMode = null;
+      setMapStatus('Click location on map to record barrier');
+      if (window.innerWidth <= 820) document.querySelector('#sidebar').classList.remove('mobile-open');
+      showToast('Click anywhere on the map where you observed the barrier.');
+    } else {
+      setMapStatus('Precinct Explorer Active');
+    }
+  }
+
+  document.querySelector('#report-mode').addEventListener('click', toggleReportArm);
+  document.querySelector('#map-report').addEventListener('click', toggleReportArm);
+
+  // Barrier form submit
+  document.querySelector('#barrier-form').addEventListener('submit', e => {
+    e.preventDefault();
+    if (!pendingReportPoint) return;
+
+    const reports = getStoredReports();
+    const newReport = {
+      id: `b_user_${Date.now()}`,
+      lat: pendingReportPoint.lat,
+      lon: pendingReportPoint.lng,
+      type: document.querySelector('#barrier-type').value,
+      severity: document.querySelector('#barrier-severity').value,
+      measuredSlope: parseFloat(document.querySelector('#barrier-measured-slope').value) || null,
+      measuredWidth: parseFloat(document.querySelector('#barrier-measured-width').value) || null,
+      note: document.querySelector('#barrier-note').value.trim(),
+      checked: document.querySelector('#barrier-confidence').value,
+      reporter: document.querySelector('#barrier-reporter').value,
+      createdAt: new Date().toISOString(),
+      confidence: 'medium',
+      moderationState: 'pending'
+    };
+
+    reports.unshift(newReport);
+    saveStoredReports(reports);
+
+    document.querySelector('#barrier-dialog').close();
+    e.target.reset();
+    pendingReportPoint = null;
+    showToast('Report submitted for MoHUA accessibility audit review!');
+  });
+
+  // Dialog close buttons
+  document.querySelector('#close-dialog').addEventListener('click', () => document.querySelector('#barrier-dialog').close());
+  document.querySelector('#close-inspector-dialog').addEventListener('click', () => document.querySelector('#inspector-dialog').close());
+  document.querySelector('#close-landmark-dialog').addEventListener('click', () => document.querySelector('#landmark-dialog').close());
+  document.querySelector('#dismiss-map-error').addEventListener('click', () => { document.querySelector('#map-error-card').hidden = true; });
+
+  // Moderation desk filter buttons
+  document.querySelectorAll('.mod-filter-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.mod-filter-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      renderModerationList(btn.dataset.modFilter);
+    });
+  });
+
+  // Moderation export & reset
+  document.querySelector('#export-reports-geojson').addEventListener('click', exportReportsGeoJSON);
+  document.querySelector('#export-reports-csv').addEventListener('click', exportReportsCSV);
+  document.querySelector('#reset-reports-demo').addEventListener('click', resetReportsToDemo);
+
+  // Standards inspector
+  document.querySelector('#inspect-active-feature-btn').addEventListener('click', () => {
+    const precinct = PRECINCTS[currentPrecinctKey];
+    if (precinct.features && precinct.features.length) {
+      openInspectorModal(precinct.features[0].id);
+    }
+  });
+
+  // Geolocation
+  document.querySelector('#locate-button').addEventListener('click', () => {
+    if (!navigator.geolocation) { showToast('Geolocation is not supported.'); return; }
+    navigator.geolocation.getCurrentPosition(pos => {
+      const pt = [pos.coords.latitude, pos.coords.longitude];
+      map.setView(pt, 17);
+      L.circleMarker(pt, { radius: 8, color: '#fff', weight: 3, fillColor: '#2563eb', fillOpacity: 1 })
+        .addTo(map).bindPopup('<b>Current Device Location</b>').openPopup();
+      setMapStatus('Centered on device position');
+    }, () => showToast('Could not retrieve current location.'));
+  });
+
+  // Category Layer Toggles
+  document.querySelectorAll('[data-osm-category]').forEach(input => {
+    input.addEventListener('change', () => {
+      const cat = input.dataset.osmCategory;
+      const checked = input.checked;
+      if (cat === 'steps' && layers.steps) checked ? map.addLayer(layers.steps) : map.removeLayer(layers.steps);
+      if (cat === 'ramps' && layers.ramps) checked ? map.addLayer(layers.ramps) : map.removeLayer(layers.ramps);
+      if (cat === 'crossings' && layers.crossings) checked ? map.addLayer(layers.crossings) : map.removeLayer(layers.crossings);
+      if (cat === 'tactile' && layers.tactile) checked ? map.addLayer(layers.tactile) : map.removeLayer(layers.tactile);
+      if (cat === 'places' && layers.places) checked ? map.addLayer(layers.places) : map.removeLayer(layers.places);
+      if (cat === 'reports' && layers.reports) checked ? map.addLayer(layers.reports) : map.removeLayer(layers.reports);
+    });
+  });
+
+  // View mode toggles (Map vs List)
+  const viewMapBtn = document.querySelector('#view-map-mode');
+  const viewListBtn = document.querySelector('#view-list-mode');
+  if (viewMapBtn && viewListBtn) {
+    viewMapBtn.addEventListener('click', () => {
+      viewMapBtn.classList.add('active');
+      viewListBtn.classList.remove('active');
+      document.querySelector('#feature-list').style.maxHeight = '280px';
+      document.querySelector('#feature-list').style.overflowY = 'auto';
+      showToast('Map view focused.');
+    });
+    viewListBtn.addEventListener('click', () => {
+      viewListBtn.classList.add('active');
+      viewMapBtn.classList.remove('active');
+      document.querySelector('#feature-list').style.maxHeight = 'none';
+      document.querySelector('#feature-list').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      showToast('Accessible table/list view expanded.');
+    });
+  }
+
+  // Live OSM Overpass Loader
+  const loadDetailsBtn = document.querySelector('#load-details');
+  if (loadDetailsBtn) {
+    loadDetailsBtn.addEventListener('click', loadAreaDetails);
+  }
+
+  // Resource Library Category Filter
+  document.querySelectorAll('.resource-filter-button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.resource-filter-button').forEach(b => {
+        const active = b === btn;
+        b.classList.toggle('active', active);
+        b.setAttribute('aria-selected', String(active));
+      });
+      const filterCat = btn.dataset.resourceFilter;
+      document.querySelectorAll('.resource-list > a').forEach(link => {
+        link.hidden = filterCat !== 'all' && link.dataset.resource !== filterCat;
+      });
+    });
+  });
+
+  // Global Escape key listener for dialogs
+  window.addEventListener('keydown', e => {
+    if (e.key === 'Escape') {
+      const bDialog = document.querySelector('#barrier-dialog');
+      const iDialog = document.querySelector('#inspector-dialog');
+      const lDialog = document.querySelector('#landmark-dialog');
+      if (bDialog && bDialog.open) bDialog.close();
+      if (iDialog && iDialog.open) iDialog.close();
+      if (lDialog && lDialog.open) lDialog.close();
+    }
+  });
+});
+
+async function loadAreaDetails() {
+  const status = document.querySelector('#details-status');
+  const button = document.querySelector('#load-details');
+
+  if (directFilePreview) {
+    status.textContent = 'Precinct features loaded. Live Overpass details load when served via localhost launcher.';
+    showToast('Loaded verified precinct features.');
+    return;
+  }
+  if (map.getZoom() < 14) {
+    status.textContent = 'Zoom in closer to a neighbourhood before loading live details.';
+    showToast('Zoom in to zoom level 14 or closer, then refresh details.');
+    return;
+  }
+
+  const bounds = map.getBounds();
+  const bbox = [bounds.getSouth(), bounds.getWest(), bounds.getNorth(), bounds.getEast()].join(',');
+  const query = `[out:json][timeout:25];(node["highway"="steps"](${bbox});way["highway"="steps"](${bbox});node["ramp:wheelchair"](${bbox});way["ramp:wheelchair"](${bbox});node["ramp"](${bbox});way["ramp"](${bbox});node["crossing"](${bbox});node["kerb"](${bbox});node["entrance"](${bbox});node["wheelchair"](${bbox});way["wheelchair"](${bbox}););out center tags;`;
+
+  button.disabled = true;
+  button.textContent = 'Loading live OSM details…';
+  status.textContent = 'Requesting tagged features from OpenStreetMap…';
+
+  try {
+    const response = await fetch('https://overpass-api.de/api/interpreter', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
+      body: new URLSearchParams({ data: query })
+    });
+    if (!response.ok) throw new Error('Live Overpass service is busy. Try again in a moment.');
+    const data = await response.json();
+    let count = 0;
+    data.elements.forEach(el => {
+      const lat = el.lat ?? el.center?.lat;
+      const lon = el.lon ?? el.center?.lon;
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
+      count++;
+      const tags = el.tags || {};
+      let kind = 'places';
+      let glyph = '♿';
+      if (tags.highway === 'steps') { kind = 'steps'; glyph = '↟'; }
+      else if (tags.ramp === 'yes' || tags['ramp:wheelchair'] === 'yes') { kind = 'ramp'; glyph = '↗'; }
+      else if (tags.crossing || tags.kerb) { kind = 'crossing'; glyph = '╱'; }
+
+      const marker = L.marker([lat, lon], { icon: pinIcon(kind, glyph) });
+      marker.bindPopup(`<div class="popup-kicker">LIVE OSM TAG</div><div class="popup-title">${escapeHtml(tags.name || 'Mapped Access Feature')}</div><div class="popup-detail">Source: OpenStreetMap tags (${el.type} ${el.id})</div>`);
+      if (kind === 'steps' && layers.steps) marker.addTo(layers.steps);
+      else if (kind === 'ramp' && layers.ramps) marker.addTo(layers.ramps);
+      else if (kind === 'crossing' && layers.crossings) marker.addTo(layers.crossings);
+      else if (layers.places) marker.addTo(layers.places);
+    });
+    status.textContent = count ? `Loaded ${count} live OSM tags in current view.` : 'No OSM tags found in this view.';
+    showToast(count ? `Loaded ${count} live OSM tags.` : 'No live access tags found in this view.');
+  } catch (err) {
+    status.textContent = err.message;
+    showToast(err.message);
+  } finally {
+    button.disabled = false;
+    button.textContent = 'Refresh / Load live OSM details';
+  }
+}
+
+
+// Explicit global window bindings for inline HTML handlers
+window.switchPanel = switchPanel;
+window.openInspectorModal = openInspectorModal;
+window.verifyReport = verifyReport;
+window.resolveReport = resolveReport;
+window.rejectReport = rejectReport;
+
