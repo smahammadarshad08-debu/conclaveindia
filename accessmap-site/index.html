@@ -152,6 +152,17 @@
             <div class="route-line origin-line">
               <span class="route-dot origin" aria-hidden="true"></span>
               <button class="pick-button" data-pick="origin" id="origin-pick">Choose starting point on map</button>
+              <button class="use-my-location-btn" id="btn-use-my-location" title="Set starting point to current GPS location" aria-label="Use Current Location">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <circle cx="12" cy="12" r="7"></circle>
+                  <circle cx="12" cy="12" r="2" fill="currentColor"></circle>
+                  <line x1="12" y1="1" x2="12" y2="4"></line>
+                  <line x1="12" y1="20" x2="12" y2="23"></line>
+                  <line x1="1" y1="12" x2="4" y2="12"></line>
+                  <line x1="20" y1="12" x2="23" y2="12"></line>
+                </svg>
+                <span>GPS</span>
+              </button>
               <button class="landmark-pick-btn" data-target="origin" title="Pick from landmarks">▼</button>
             </div>
             <div class="route-line destination-line">
@@ -675,8 +686,15 @@
 
     <!-- Mobile Floating Action Buttons (FABs) -->
     <div class="mobile-fab-stack" id="mobile-fab-stack">
-      <button class="mobile-fab" id="mobile-fab-locate" title="My Location" aria-label="My Location">
-        <span>🎯</span>
+      <button class="mobile-fab locate-fab" id="mobile-fab-locate" title="Navigate to Current Location" aria-label="Navigate to Current Location">
+        <svg class="locate-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="7.5"></circle>
+          <line x1="12" y1="2" x2="12" y2="5.5"></line>
+          <line x1="12" y1="18.5" x2="12" y2="22"></line>
+          <line x1="2" y1="12" x2="5.5" y2="12"></line>
+          <line x1="18.5" y1="12" x2="22" y2="12"></line>
+          <circle cx="12" cy="12" r="2.5" fill="currentColor"></circle>
+        </svg>
       </button>
       <button class="mobile-fab" id="mobile-fab-report" title="Report Barrier" aria-label="Report Barrier">
         <span>⚠️</span>

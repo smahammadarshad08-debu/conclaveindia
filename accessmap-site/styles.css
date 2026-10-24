@@ -349,6 +349,40 @@ body.theme-high-contrast .tag-item {
 }
 .swap-points-btn:hover { color: var(--forest); border-color: var(--forest); }
 
+.use-my-location-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: var(--surface-alt);
+  border: 1px solid var(--line-strong);
+  color: var(--forest);
+  font-size: 10px;
+  font-weight: 700;
+  padding: 3px 6px;
+  border-radius: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+}
+.use-my-location-btn:hover {
+  background: #e0f2fe;
+  border-color: #0284c7;
+  color: #0369a1;
+}
+.use-my-location-btn:active {
+  transform: scale(0.94);
+}
+.use-my-location-btn svg {
+  color: #0284c7;
+  flex-shrink: 0;
+}
+body.theme-high-contrast .use-my-location-btn {
+  background: #0f1c13;
+  color: #22c55e;
+  border-color: #22c55e;
+}
+
 /* Route filters details */
 .route-filters-details {
   border: 1px solid var(--line); border-radius: var(--radius-sm); margin-bottom: 14px;
@@ -1099,11 +1133,21 @@ body.theme-high-contrast .peek-badge {
   display: flex;
   position: fixed;
   right: 14px;
-  bottom: 74px;
-  z-index: 450;
+  bottom: calc(50vh + 16px);
+  z-index: 520;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
   pointer-events: none;
+  transition: bottom 0.32s cubic-bezier(0.2, 0.9, 0.3, 1), top 0.32s cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+.sidebar.sheet-collapsed + .map-shell .mobile-fab-stack,
+body:has(.sidebar.sheet-collapsed) .mobile-fab-stack {
+  bottom: 124px;
+}
+.sidebar.sheet-expanded + .map-shell .mobile-fab-stack,
+body:has(.sidebar.sheet-expanded) .mobile-fab-stack {
+  bottom: auto;
+  top: 110px;
 }
 .mobile-fab {
   pointer-events: auto;
@@ -1112,17 +1156,105 @@ body.theme-high-contrast .peek-badge {
   border-radius: 50%;
   background: #ffffff;
   border: 1px solid var(--line);
-  box-shadow: 0 4px 16px rgba(18, 36, 27, 0.15);
+  box-shadow: 0 4px 16px rgba(18, 36, 27, 0.18);
   display: grid;
   place-items: center;
   font-size: 18px;
+  color: var(--forest);
   cursor: pointer;
-  transition: transform 0.15s ease, background 0.15s ease;
+  transition: transform 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+}
+.mobile-fab:hover {
+  box-shadow: 0 6px 20px rgba(18, 36, 27, 0.25);
+  background: #f8fafc;
 }
 .mobile-fab:active {
   transform: scale(0.92);
   background: var(--surface-alt);
 }
+.mobile-fab.locate-fab {
+  color: #0284c7;
+}
+.mobile-fab.locate-fab.locating svg {
+  animation: fabSpinRadar 1s linear infinite;
+  color: #2563eb;
+}
+@keyframes fabSpinRadar {
+  0% { transform: rotate(0deg) scale(0.9); }
+  50% { transform: rotate(180deg) scale(1.15); }
+  100% { transform: rotate(360deg) scale(0.9); }
+}
+
+/* Live User GPS Accuracy & Radar Marker */
+.user-gps-marker {
+  position: relative;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.gps-pulse-ring {
+  position: absolute;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: rgba(37, 99, 235, 0.32);
+  animation: gpsRadarPulse 2s ease-out infinite;
+  pointer-events: none;
+}
+.gps-dot-inner {
+  position: relative;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #2563eb;
+  border: 3px solid #ffffff;
+  box-shadow: 0 2px 10px rgba(37, 99, 235, 0.65), 0 0 0 1px rgba(0, 0, 0, 0.15);
+  z-index: 2;
+}
+@keyframes gpsRadarPulse {
+  0% {
+    transform: scale(0.35);
+    opacity: 0.95;
+  }
+  65% {
+    transform: scale(1.6);
+    opacity: 0.22;
+  }
+  100% {
+    transform: scale(2.2);
+    opacity: 0;
+  }
+}
+.gps-popup-content {
+  font-family: var(--sans);
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--ink);
+}
+.gps-popup-content b {
+  color: #0284c7;
+  display: block;
+  font-size: 12px;
+  margin-bottom: 2px;
+}
+.gps-popup-set-origin-btn {
+  margin-top: 6px;
+  width: 100%;
+  padding: 5px 8px;
+  background: #0284c7;
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 700;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.gps-popup-set-origin-btn:hover {
+  background: #0369a1;
+}
+
 body.theme-high-contrast .mobile-fab,
 body.theme-high-contrast .mobile-search-pill,
 body.theme-high-contrast .mobile-precinct-pill-select,
