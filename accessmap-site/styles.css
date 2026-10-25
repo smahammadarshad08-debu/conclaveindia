@@ -1726,3 +1726,38 @@ body.live-navigation-active .mobile-fab-stack {
     scroll-behavior: auto !important; transition: none !important; animation: none !important;
   }
 }
+
+/* Print Stylesheet for Tactile & High-Contrast Physical Maps */
+@media print {
+  #mobile-app-floating-top,
+  .mobile-fab-stack,
+  .bottom-sheet-nav,
+  .live-nav-dock,
+  .btn-start-navigation {
+    display: none !important;
+  }
+  body, .app-shell, .map-shell {
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+  .mobile-sheet {
+    position: static !important;
+    transform: none !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
+  .directions-step-card {
+    break-inside: avoid;
+    border: 1px solid #cccccc !important;
+  }
+}
+
+/* High Contrast Mode Adjustments (WCAG 2.1 AA) */
+@media (forced-colors: active) {
+  .btn-start-navigation,
+  .live-nav-turn-banner,
+  .live-nav-dock,
+  .directions-title-badge {
+    border: 2px solid ButtonText !important;
+  }
+}
