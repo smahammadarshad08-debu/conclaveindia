@@ -1,0 +1,12 @@
+{
+  "rules": {
+    "color-no-invalid-hex": true,
+    "block-no-empty": true,
+    "unit-no-unknown": true,
+    "property-no-unknown": true,
+    "selector-pseudo-element-no-unknown": true,
+    "selector-type-no-unknown": true,
+    "media-feature-name-no-unknown": true,
+    "no-duplicate-selectors": true
+  }
+}
