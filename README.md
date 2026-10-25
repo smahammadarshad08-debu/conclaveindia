@@ -5,7 +5,10 @@
 **Compliant with the Ministry of Housing & Urban Affairs (MoHUA) Harmonised Guidelines 2021 (HG-2021)**
 
 [![Render Status](https://img.shields.io/badge/Render-Deploy%20Ready-46E3B7?style=for-the-badge&logo=render&logoColor=white)](https://render.com)
-[![Standards](https://img.shields.io/badge/Standards-MoHUA%20HG--2021-10b981?style=for-the-badge&logo=gov.uk&logoColor=white)](https://mohua.gov.in)
+[![CI Validation](https://img.shields.io/badge/CI-Passing-brightgreen?style=for-the-badge&logo=github-actions&logoColor=white)](.github/workflows/ci.yml)
+[![Version](https://img.shields.io/badge/Release-v1.5.0-blue?style=for-the-badge)](CHANGELOG.md)
+[![Standards](https://img.shields.io/badge/Standards-MoHUA%20HG--2021-10b981?style=for-the-badge&logo=gov.uk&logoColor=white)](docs/ACCESSIBILITY_STANDARDS.md)
+[![Live Navigation](https://img.shields.io/badge/Live%20Guidance-Turn--by--Turn%20%2B%20Voice-amber?style=for-the-badge)](#-turn-by-turn-live-navigation--voice-guidance)
 [![Leaflet](https://img.shields.io/badge/Map%20Engine-Leaflet%201.9.4-16a34a?style=for-the-badge&logo=leaflet&logoColor=white)](https://leafletjs.com)
 [![PWA](https://img.shields.io/badge/PWA-Offline%20Ready-6366f1?style=for-the-badge&logo=pwa&logoColor=white)](#-offline-first--pwa-resilience)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge)](LICENSE)
@@ -13,11 +16,13 @@
 
 <p align="center">
   <a href="#-key-features">Key Features</a> •
-  <a href="#-system-architecture">System Architecture</a> •
+  <a href="#-turn-by-turn-live-navigation--voice-guidance">Live Navigation</a> •
+  <a href="#-system-architecture">Architecture</a> •
   <a href="#-routing-logic--algorithm">Routing Algorithm</a> •
-  <a href="#-render-cloud-deployment-guide">Render Deployment</a> •
-  <a href="#-mohua-hg-2021-compliance-matrix">HG-2021 Standards</a> •
-  <a href="#-local-development">Local Setup</a>
+  <a href="docs/ACCESSIBILITY_STANDARDS.md">HG-2021 Standards</a> •
+  <a href="docs/DEPLOYMENT_GUIDE.md">Deployment Guide</a> •
+  <a href="docs/DEVELOPER_SETUP.md">Developer Setup</a> •
+  <a href="CHANGELOG.md">Changelog</a>
 </p>
 
 ---
@@ -113,6 +118,12 @@ Four specialized routing modes tailored to distinct mobility profiles:
 
 ### 🛡️ MoHUA HG-2021 Standards Inspector
 * Direct modal inspection of any mapped feature against specific clauses of the **Harmonised Guidelines and Standards for Universal Accessibility in India (2021)**.
+
+### 🔊 Turn-by-Turn Live Navigation & Voice Guidance
+* **Google Maps Style Live HUD:** Collapses the bottom sheet and displays a floating top turn banner showing upcoming turn icons, distance to the maneuver (`In 110 m`), and transit concourse guidance.
+* **Spoken Voice Guidance:** Built-in Web Speech Synthesis voice assistant that announces journey departure, upcoming turns, and arrival without requiring screen glances.
+* **Live GPS Puck:** Pulsing radar-animated map puck tracking your current coordinate step on the route line.
+* **Mute & Replay Controls:** One-tap audio mute/unmute toggle and instant repeat audio control for loud urban environments.
 * Evaluates physical dimensions: ramp slope gradient, handrail height, tactile warning placement, and doorway clear openings.
 
 ### 📋 Citizen Barrier Auditing & Moderation Desk
