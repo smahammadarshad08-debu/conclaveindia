@@ -315,8 +315,31 @@
             </button>
           </div>
           <span class="kicker">ACCESSIBLE TURN-BY-TURN INSTRUCTIONS</span>
-          <h1 id="directions-title">Accessible Route Guidance</h1>
+          <div class="directions-title-wrap">
+            <h1 id="directions-title" class="directions-title-heading">
+              <span id="directions-title-text">Accessible Route Guidance</span>
+            </h1>
+            <span class="directions-title-badge" title="Accessible Guided Navigation" aria-hidden="true">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+                <polygon points="3 11 22 2 13 21 11 13 3 11"></polygon>
+              </svg>
+            </span>
+          </div>
           <p id="directions-summary">Step-free route avoiding all stairs and hazardous slopes.</p>
+
+          <!-- Google Maps Style "Start Live Navigation" Button -->
+          <button class="btn-start-navigation" id="start-live-nav-btn" type="button" aria-label="Start live route guidance">
+            <span class="start-nav-icon" aria-hidden="true">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 2L4.5 20.29l.71.71L12 18l6.79 3 .71-.71z"/>
+              </svg>
+            </span>
+            <div class="start-nav-text-col">
+              <span class="start-nav-main">Start Live Navigation</span>
+              <span class="start-nav-sub">Voice Guidance · Live Turn-by-Turn GPS</span>
+            </div>
+            <span class="start-nav-arrow" aria-hidden="true">➔</span>
+          </button>
         </div>
 
         <div class="directions-metrics-strip" id="directions-metrics-strip">
@@ -666,6 +689,44 @@
   <!-- Interactive Map Shell -->
   <main class="map-shell" id="map-shell">
     <div id="map" aria-label="Interactive AccessMap map"></div>
+
+    <!-- Live Turn-by-Turn Navigation HUD (Google Maps Style) -->
+    <div class="live-nav-hud" id="live-nav-hud" hidden aria-live="assertive">
+      <!-- Top Turn Banner -->
+      <div class="live-nav-turn-banner" id="live-nav-turn-banner">
+        <div class="live-nav-maneuver-icon-wrap" id="live-nav-icon-wrap">
+          <span class="live-nav-maneuver-icon" id="live-nav-maneuver-icon">⬆️</span>
+        </div>
+        <div class="live-nav-turn-details">
+          <div class="live-nav-turn-dist" id="live-nav-turn-dist">Head forward</div>
+          <div class="live-nav-turn-instruction" id="live-nav-turn-instruction">Depart starting point via accessible footway</div>
+          <div class="live-nav-turn-sub" id="live-nav-turn-sub">HG-2021 Step-free · Level paved surface</div>
+        </div>
+        <button class="live-nav-voice-btn" id="live-nav-voice-toggle" type="button" aria-label="Toggle voice guidance" title="Toggle Voice Guidance">
+          <span id="live-nav-voice-icon">🔊</span>
+        </button>
+      </div>
+
+      <!-- Bottom Floating Navigation Control Dock -->
+      <div class="live-nav-dock" id="live-nav-dock">
+        <div class="live-nav-dock-left">
+          <span class="live-nav-remaining-time" id="live-nav-remaining-time">-- min</span>
+          <span class="live-nav-remaining-meta">
+            <span id="live-nav-remaining-dist">-- m</span> · <span id="live-nav-step-counter">Step 1</span>
+          </span>
+        </div>
+        <div class="live-nav-dock-controls">
+          <button class="live-nav-dock-btn" id="live-nav-prev-step" type="button" title="Previous Maneuver" aria-label="Previous step">❮</button>
+          <button class="live-nav-dock-btn replay" id="live-nav-repeat-voice" type="button" title="Repeat Voice Direction" aria-label="Repeat voice instruction">
+            <span>🗣️</span>
+          </button>
+          <button class="live-nav-dock-btn" id="live-nav-next-step" type="button" title="Next Maneuver" aria-label="Next step">❯</button>
+          <button class="live-nav-exit-btn" id="live-nav-exit" type="button" title="Exit Live Navigation">
+            <span>✕</span> Exit
+          </button>
+        </div>
+      </div>
+    </div>
 
     <!-- Mobile App Floating Top Bar -->
     <div class="mobile-app-floating-top" id="mobile-app-floating-top">

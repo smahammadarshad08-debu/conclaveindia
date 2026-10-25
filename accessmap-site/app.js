@@ -1414,7 +1414,17 @@ async function fetchLiveOSRMRoute(originLL, destLL, mode, prefs) {
       const instruction = `Step ${idx + 1}: ${capitalizeWords(maneuver)} on ${streetName} for ${stepDist}m`;
       const details = `Distance: ${stepDist}m · Paved walkway with dropped kerbs`;
 
-      lastCalculatedDirections.push({ step: idx + 1, instruction, details, alert: null });
+      lastCalculatedDirections.push({
+        step: idx + 1,
+        instruction,
+        details,
+        alert: null,
+        dist: stepDist,
+        maneuver: capitalizeWords(maneuver),
+        streetName: streetName,
+        icon: icon,
+        coord: st.maneuver && st.maneuver.location ? [st.maneuver.location[1], st.maneuver.location[0]] : null
+      });
 
       const el = document.createElement('div');
       el.className = 'step-item';
@@ -1450,7 +1460,17 @@ async function fetchLiveOSRMRoute(originLL, destLL, mode, prefs) {
     ];
 
     fallbackSteps.forEach((s, idx) => {
-      lastCalculatedDirections.push({ step: idx + 1, instruction: s.instruction, details: s.details, alert: null });
+      lastCalculatedDirections.push({
+        step: idx + 1,
+        instruction: s.instruction,
+        details: s.details,
+        alert: null,
+        dist: s.dist || 0,
+        maneuver: s.maneuver || 'Continue forward',
+        streetName: s.streetName || 'Accessible Footway',
+        icon: s.icon,
+        coord: null
+      });
       const el = document.createElement('div');
       el.className = 'step-item';
       el.innerHTML = `
@@ -1480,7 +1500,7 @@ async function fetchLiveOSRMRoute(originLL, destLL, mode, prefs) {
   const mComp = document.querySelector('#metric-compliance');
   if (mComp) mComp.textContent = `100%`;
 
-  const dirTitle = document.querySelector('#directions-title');
+  const dirTitle = document.querySelector('#directions-title-text') || document.querySelector('#directions-title');
   if (dirTitle) dirTitle.textContent = `${totalDistanceM}m · ${modeTitle} Route`;
   const dirSummary = document.querySelector('#directions-summary');
   if (dirSummary) dirSummary.textContent = `Estimated ${rollTimeMin} min roll · Prioritizing compliant dropped kerbs and level footways.`;
@@ -1507,11 +1527,13 @@ function generateDirectionsList(accessible, standard) {
     return;
   }
 
-  const dirTitle = document.querySelector('#directions-title');
+  const dirTitle = document.querySelector('#directions-title-text') || document.querySelector('#directions-title');
   if (dirTitle) dirTitle.textContent = `${accessible.totalDistance}m · Step-Free Route`;
   const dirSummary = document.querySelector('#directions-summary');
   const estMin = Math.max(1, Math.round(accessible.totalDistance / 55));
   if (dirSummary) dirSummary.textContent = `Estimated ${estMin} min · 100% compliant with MoHUA Harmonised Guidelines 2021.`;
+
+  const precinct = PRECINCTS[currentPrecinctKey];
 
   accessible.edges.forEach((edge, index) => {
     let icon = '🚶';
@@ -1530,11 +1552,22 @@ function generateDirectionsList(accessible, standard) {
     const instruction = `Step ${index + 1}: Follow ${edge.name} for ${edge.length}m`;
     const details = [slopeInfo, widthInfo, surfaceInfo].filter(Boolean).join(' · ');
 
+    let coord = null;
+    if (precinct && precinct.nodes && precinct.nodes[edge.from]) {
+      const n = precinct.nodes[edge.from];
+      coord = [n.lat, n.lng];
+    }
+
     lastCalculatedDirections.push({
       step: index + 1,
       instruction: instruction,
       details: details,
-      alert: alertText
+      alert: alertText,
+      dist: edge.length,
+      maneuver: edge.type === 'ramp' ? 'Take universal ramp' : edge.type === 'crossing' ? 'Cross pedestrian walkway' : edge.type === 'elevator' ? 'Take accessible elevator' : 'Follow accessible corridor',
+      streetName: edge.name,
+      icon: icon,
+      coord: coord
     });
 
     const stepEl = document.createElement('div');
@@ -1586,6 +1619,212 @@ function speakDirectionsAloud() {
   };
 
   window.speechSynthesis.speak(utterance);
+}
+
+// ==========================================
+// 6B. GOOGLE MAPS STYLE LIVE TURN-BY-TURN NAVIGATION & VOICE GUIDANCE
+// ==========================================
+
+let isLiveNavActive = false;
+let currentNavStepIndex = 0;
+let isVoiceMuted = false;
+let liveNavMarker = null;
+
+function startLiveNavigation() {
+  if (!lastCalculatedDirections || !lastCalculatedDirections.length) {
+    showToast('Please calculate a route first before starting live navigation.');
+    return;
+  }
+
+  isLiveNavActive = true;
+  currentNavStepIndex = 0;
+  document.body.classList.add('live-navigation-active');
+
+  const hud = document.querySelector('#live-nav-hud');
+  if (hud) hud.hidden = false;
+
+  // Collapse the bottom sheet drawer so user has maximum map visibility
+  const sidebar = document.querySelector('#sidebar');
+  if (sidebar) {
+    sidebar.classList.add('sheet-collapsed');
+  }
+
+  // Create pulsing navigation marker
+  if (!liveNavMarker) {
+    const navPuckIcon = L.divIcon({
+      className: 'live-nav-marker',
+      html: `
+        <div class="live-nav-pulse"></div>
+        <div class="live-nav-puck">▲</div>
+      `,
+      iconSize: [36, 36],
+      iconAnchor: [18, 18]
+    });
+    liveNavMarker = L.marker([0, 0], { icon: navPuckIcon, zIndexOffset: 2000 }).addTo(map);
+  }
+
+  if (typeof triggerHaptic === 'function') triggerHaptic(20);
+  showToast('Live turn-by-turn navigation started.');
+
+  // Play initial audio guidance chime & voice
+  updateLiveNavUI(true);
+}
+
+function updateLiveNavUI(speak = true) {
+  if (!isLiveNavActive || !lastCalculatedDirections.length) return;
+
+  const totalSteps = lastCalculatedDirections.length;
+  const step = lastCalculatedDirections[currentNavStepIndex];
+  if (!step) return;
+
+  // 1. Update Top Turn Banner
+  const iconEl = document.querySelector('#live-nav-maneuver-icon');
+  const distEl = document.querySelector('#live-nav-turn-dist');
+  const instEl = document.querySelector('#live-nav-turn-instruction');
+  const subEl = document.querySelector('#live-nav-turn-sub');
+
+  if (iconEl) iconEl.textContent = step.icon || '⬆️';
+  if (distEl) distEl.textContent = step.dist ? `In ${step.dist} m` : 'Head forward';
+  if (instEl) instEl.textContent = step.instruction.replace(/^Step \d+:\s*/, '');
+  if (subEl) subEl.textContent = step.details || 'Accessible pedestrian pathway · HG-2021 step-free';
+
+  // 2. Update Bottom Dock
+  const timeEl = document.querySelector('#live-nav-remaining-time');
+  const metaDistEl = document.querySelector('#live-nav-remaining-dist');
+  const counterEl = document.querySelector('#live-nav-step-counter');
+  const prevBtn = document.querySelector('#live-nav-prev-step');
+  const nextBtn = document.querySelector('#live-nav-next-step');
+
+  const activeDistText = document.querySelector('#metric-dist') ? document.querySelector('#metric-dist').textContent : '';
+  const activeTimeText = document.querySelector('#metric-time') ? document.querySelector('#metric-time').textContent : '';
+
+  if (timeEl) timeEl.textContent = activeTimeText || '-- min';
+  if (metaDistEl) metaDistEl.textContent = activeDistText || '-- m';
+  if (counterEl) counterEl.textContent = `Step ${currentNavStepIndex + 1} of ${totalSteps}`;
+
+  if (prevBtn) prevBtn.disabled = currentNavStepIndex === 0;
+  if (nextBtn) {
+    nextBtn.textContent = currentNavStepIndex === totalSteps - 1 ? 'Finish 🏁' : '❯';
+  }
+
+  // 3. Move Navigation Puck on Map
+  let targetCoord = step.coord;
+  if (!targetCoord && activeAccessibleRoute) {
+    const latlngs = activeAccessibleRoute.getLatLngs();
+    if (latlngs && latlngs.length) {
+      const idx = Math.min(latlngs.length - 1, Math.round((currentNavStepIndex / totalSteps) * (latlngs.length - 1)));
+      targetCoord = [latlngs[idx].lat, latlngs[idx].lng];
+    }
+  }
+
+  if (targetCoord && liveNavMarker) {
+    liveNavMarker.setLatLng(targetCoord);
+    map.setView(targetCoord, Math.max(17, map.getZoom()), { animate: true, duration: 0.8 });
+  }
+
+  // 4. Voice Speech Announcement (like Google Maps)
+  if (speak && !isVoiceMuted) {
+    speakLiveNavStep(step, currentNavStepIndex, totalSteps);
+  }
+}
+
+function speakLiveNavStep(step, index, total) {
+  if (!('speechSynthesis' in window)) return;
+  if (isVoiceMuted) return;
+
+  window.speechSynthesis.cancel();
+
+  let text = '';
+  const cleanInst = step.instruction.replace(/^Step \d+:\s*/, '');
+
+  if (index === 0) {
+    text = `Starting accessible navigation. Head forward for ${step.dist ? step.dist + ' meters' : 'a short distance'}, then ${cleanInst}.`;
+  } else if (index === total - 1) {
+    text = `In ${step.dist ? step.dist + ' meters' : 'a few meters'}, you will arrive at your destination.`;
+  } else {
+    text = `In ${step.dist ? step.dist + ' meters' : 'a short distance'}, ${cleanInst}.`;
+  }
+
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.rate = 0.95;
+  utterance.pitch = 1.0;
+  utterance.lang = 'en-US';
+
+  const voices = window.speechSynthesis.getVoices();
+  if (voices && voices.length) {
+    const preferred = voices.find(v => v.lang.startsWith('en') && (v.name.includes('Natural') || v.name.includes('Google') || v.name.includes('Samantha')));
+    if (preferred) utterance.voice = preferred;
+  }
+
+  window.speechSynthesis.speak(utterance);
+}
+
+function nextNavStep() {
+  if (!isLiveNavActive) return;
+  if (typeof triggerHaptic === 'function') triggerHaptic(10);
+  if (currentNavStepIndex < lastCalculatedDirections.length - 1) {
+    currentNavStepIndex++;
+    updateLiveNavUI(true);
+  } else {
+    // Reached destination!
+    speakLiveNavStep({ instruction: 'Arrived at your destination', dist: 0 }, lastCalculatedDirections.length - 1, lastCalculatedDirections.length);
+    showToast('🎉 You have arrived at your destination!');
+    setTimeout(() => exitLiveNavigation(), 2200);
+  }
+}
+
+function prevNavStep() {
+  if (!isLiveNavActive) return;
+  if (typeof triggerHaptic === 'function') triggerHaptic(10);
+  if (currentNavStepIndex > 0) {
+    currentNavStepIndex--;
+    updateLiveNavUI(true);
+  }
+}
+
+function toggleVoiceMute() {
+  isVoiceMuted = !isVoiceMuted;
+  if (typeof triggerHaptic === 'function') triggerHaptic(10);
+  const icon = document.querySelector('#live-nav-voice-icon');
+  if (icon) icon.textContent = isVoiceMuted ? '🔇' : '🔊';
+
+  if (isVoiceMuted) {
+    if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+    showToast('Voice guidance muted.');
+  } else {
+    showToast('Voice guidance enabled.');
+    updateLiveNavUI(true);
+  }
+}
+
+function exitLiveNavigation() {
+  isLiveNavActive = false;
+  document.body.classList.remove('live-navigation-active');
+
+  const hud = document.querySelector('#live-nav-hud');
+  if (hud) hud.hidden = true;
+
+  if (liveNavMarker) {
+    map.removeLayer(liveNavMarker);
+    liveNavMarker = null;
+  }
+
+  if ('speechSynthesis' in window) {
+    window.speechSynthesis.cancel();
+  }
+
+  // Restore sidebar
+  const sidebar = document.querySelector('#sidebar');
+  if (sidebar) {
+    sidebar.classList.remove('sheet-collapsed');
+  }
+
+  // Fit map back to full route
+  if (activeAccessibleRoute) {
+    map.fitBounds(activeAccessibleRoute.getBounds().pad(0.2));
+  }
+
+  showToast('Exited live navigation.');
 }
 
 // ==========================================
@@ -2397,6 +2636,32 @@ document.addEventListener('DOMContentLoaded', () => {
   document.querySelector('#open-resource-tab').addEventListener('click', () => switchPanel('standards'));
   document.querySelector('#directions-back-btn').addEventListener('click', () => switchPanel('explore'));
 
+  // Live Turn-by-Turn Navigation & Voice Listeners
+  const startLiveNavBtn = document.querySelector('#start-live-nav-btn');
+  if (startLiveNavBtn) {
+    startLiveNavBtn.addEventListener('click', startLiveNavigation);
+  }
+
+  const liveNavNextBtn = document.querySelector('#live-nav-next-step');
+  if (liveNavNextBtn) liveNavNextBtn.addEventListener('click', nextNavStep);
+
+  const liveNavPrevBtn = document.querySelector('#live-nav-prev-step');
+  if (liveNavPrevBtn) liveNavPrevBtn.addEventListener('click', prevNavStep);
+
+  const liveNavVoiceToggle = document.querySelector('#live-nav-voice-toggle');
+  if (liveNavVoiceToggle) liveNavVoiceToggle.addEventListener('click', toggleVoiceMute);
+
+  const liveNavRepeatVoice = document.querySelector('#live-nav-repeat-voice');
+  if (liveNavRepeatVoice) {
+    liveNavRepeatVoice.addEventListener('click', () => {
+      if (typeof triggerHaptic === 'function') triggerHaptic(10);
+      updateLiveNavUI(true);
+    });
+  }
+
+  const liveNavExitBtn = document.querySelector('#live-nav-exit');
+  if (liveNavExitBtn) liveNavExitBtn.addEventListener('click', exitLiveNavigation);
+
   // Mobile Bottom Navigation Bar (Plan, Route, Audits, Standards, More)
   document.querySelectorAll('.mobile-nav-item').forEach(item => {
     item.addEventListener('click', () => {
@@ -2854,6 +3119,11 @@ window.updateInfrastructureVisibility = updateInfrastructureVisibility;
 window.setRoutePoint = setRoutePoint;
 window.findAccessibleRoute = findAccessibleRoute;
 window.clearRoute = clearRoute;
+window.startLiveNavigation = startLiveNavigation;
+window.exitLiveNavigation = exitLiveNavigation;
+window.nextNavStep = nextNavStep;
+window.prevNavStep = prevNavStep;
+window.toggleVoiceMute = toggleVoiceMute;
 
 // Window scroll lock guard to prevent mobile browser viewport displacement
 window.addEventListener('scroll', () => {
