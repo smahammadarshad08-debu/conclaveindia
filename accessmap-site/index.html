@@ -940,5 +940,16 @@
     }
   </script>
   <script src="app.js"></script>
+  <script>
+    if ('serviceWorker' in navigator && (window.location.protocol === 'https:' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+      window.addEventListener('load', function() {
+        navigator.serviceWorker.register('./sw.js').then(function(reg) {
+          console.log('AccessMap ServiceWorker registered with scope:', reg.scope);
+        }).catch(function(err) {
+          console.warn('ServiceWorker registration omitted:', err);
+        });
+      });
+    }
+  </script>
 </body>
 </html>
