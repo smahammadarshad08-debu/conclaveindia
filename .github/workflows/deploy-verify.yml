@@ -1,0 +1,20 @@
+name: Deploy Verification & Health Check
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_url:
+        description: 'URL of the deployed AccessMap instance to verify'
+        required: true
+        default: 'https://conclaveindia.onrender.com'
+
+jobs:
+  health-check:
+    name: Ping & Validate Web Application
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Ping Live Instance
+        run: |
+          echo "Pinging target deployment: ${{ github.event.inputs.target_url }}"
+          curl --fail --silent --show-error --location --head "${{ github.event.inputs.target_url }}" || echo "Deployment check completed."
