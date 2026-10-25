@@ -1171,12 +1171,16 @@ async function findAccessibleRoute() {
         generateDirectionsList(accessibleResult, standardResult);
 
         showToast('Accessible route computed with HG-2021 validation.');
+        if (typeof triggerHaptic === 'function') triggerHaptic(15);
+        switchPanel('directions');
         return;
       }
     }
 
     // Seamlessly route via live OSM or accessible waypoint corridor (works anywhere in the world)
     await fetchLiveOSRMRoute(originLL, destLL, currentMode, prefs);
+    if (typeof triggerHaptic === 'function') triggerHaptic(15);
+    switchPanel('directions');
   } catch (error) {
     resultBox.innerHTML = `<div style="color:#b91c1c;font-weight:700;">${escapeHtml(error.message)}</div>`;
     resultBox.hidden = false;
@@ -1476,6 +1480,11 @@ async function fetchLiveOSRMRoute(originLL, destLL, mode, prefs) {
   const mComp = document.querySelector('#metric-compliance');
   if (mComp) mComp.textContent = `100%`;
 
+  const dirTitle = document.querySelector('#directions-title');
+  if (dirTitle) dirTitle.textContent = `${totalDistanceM}m · ${modeTitle} Route`;
+  const dirSummary = document.querySelector('#directions-summary');
+  if (dirSummary) dirSummary.textContent = `Estimated ${rollTimeMin} min roll · Prioritizing compliant dropped kerbs and level footways.`;
+
   showToast(`Accessible route calculated: ${totalDistanceM}m (~${rollTimeMin} min).`);
 }
 
@@ -1497,6 +1506,12 @@ function generateDirectionsList(accessible, standard) {
     container.innerHTML = '<div class="empty-directions-notice">No directions available.</div>';
     return;
   }
+
+  const dirTitle = document.querySelector('#directions-title');
+  if (dirTitle) dirTitle.textContent = `${accessible.totalDistance}m · Step-Free Route`;
+  const dirSummary = document.querySelector('#directions-summary');
+  const estMin = Math.max(1, Math.round(accessible.totalDistance / 55));
+  if (dirSummary) dirSummary.textContent = `Estimated ${estMin} min · 100% compliant with MoHUA Harmonised Guidelines 2021.`;
 
   accessible.edges.forEach((edge, index) => {
     let icon = '🚶';
@@ -2836,6 +2851,9 @@ window.verifyReport = verifyReport;
 window.resolveReport = resolveReport;
 window.rejectReport = rejectReport;
 window.updateInfrastructureVisibility = updateInfrastructureVisibility;
+window.setRoutePoint = setRoutePoint;
+window.findAccessibleRoute = findAccessibleRoute;
+window.clearRoute = clearRoute;
 
 // Window scroll lock guard to prevent mobile browser viewport displacement
 window.addEventListener('scroll', () => {
