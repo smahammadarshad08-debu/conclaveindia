@@ -60,12 +60,30 @@ html, body {
   padding: 0;
   overflow: hidden;
   overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
 }
 body {
   color: var(--ink);
   background: var(--paper);
   font: var(--base-size)/1.5 var(--sans);
   -webkit-font-smoothing: antialiased;
+}
+
+/* Custom Accessibility Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(18, 36, 27, 0.2);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(18, 36, 27, 0.35);
 }
 
 button, input, select, textarea { font: inherit; }
