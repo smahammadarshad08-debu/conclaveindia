@@ -4,15 +4,49 @@
   "description": "MoHUA Harmonised Guidelines 2021 compliant accessible route navigation, barrier reporting, and moderation.",
   "start_url": "./index.html",
   "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
   "background_color": "#12241b",
   "theme_color": "#12241b",
   "orientation": "portrait-primary",
   "icons": [
     {
+      "src": "favicon.svg",
+      "sizes": "48x48 96x96",
+      "type": "image/svg+xml"
+    },
+    {
+      "src": "icon-192.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-512.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
       "src": "map-preview.svg",
       "sizes": "192x192 512x512",
       "type": "image/svg+xml",
       "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Plan Accessible Route",
+      "short_name": "Plan Route",
+      "description": "Quickly plan an accessible wheelchair or tactile path",
+      "url": "./index.html#route",
+      "icons": [{ "src": "favicon.svg", "sizes": "96x96" }]
+    },
+    {
+      "name": "Find Current Location",
+      "short_name": "My Location",
+      "description": "Locate accessible infrastructure near your live GPS coordinates",
+      "url": "./index.html#current-location",
+      "icons": [{ "src": "favicon.svg", "sizes": "96x96" }]
     }
   ],
   "categories": ["navigation", "accessibility", "travel", "utilities"]
