@@ -1,0 +1,33 @@
+{
+  "name": "accessmap-india",
+  "version": "1.5.0",
+  "description": "Accessible pedestrian and transit routing web application adhering to MoHUA Harmonised Guidelines 2021 and RPwD Act 2016",
+  "main": "server.py",
+  "scripts": {
+    "start": "python server.py",
+    "test": "python -m unittest discover -s tests",
+    "test:routing": "python tests/test_routing_flow.py",
+    "test:a11y": "python tests/test_accessibility_audit.py",
+    "test:nav": "python tests/test_live_navigation_suite.py"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/smahammadarshad08-debu/conclaveindia.git"
+  },
+  "keywords": [
+    "accessibility",
+    "wheelchair-navigation",
+    "tactile-paving",
+    "gis",
+    "leaflet",
+    "osrm",
+    "india-smart-cities",
+    "wcag21"
+  ],
+  "author": "AccessMap India Team",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/smahammadarshad08-debu/conclaveindia/issues"
+  },
+  "homepage": "https://github.com/smahammadarshad08-debu/conclaveindia#readme"
+}
