@@ -1630,6 +1630,12 @@ let currentNavStepIndex = 0;
 let isVoiceMuted = false;
 let liveNavMarker = null;
 
+/**
+ * Initializes and launches live turn-by-turn navigation mode.
+ * Collapses the bottom sheet to a peek state, initializes the pulsing GPS puck,
+ * presents the live HUD banner, and triggers the introductory voice prompt.
+ * @returns {void}
+ */
 function startLiveNavigation() {
   if (!lastCalculatedDirections || !lastCalculatedDirections.length) {
     showToast('Please calculate a route first before starting live navigation.');
