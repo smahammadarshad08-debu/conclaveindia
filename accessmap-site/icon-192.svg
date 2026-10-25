@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" width="192" height="192">
+  <defs>
+    <linearGradient id="bgGrad192" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#064e3b"/>
+      <stop offset="100%" stop-color="#022c22"/>
+    </linearGradient>
+    <linearGradient id="wheelGrad192" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#34d399"/>
+      <stop offset="100%" stop-color="#10b981"/>
+    </linearGradient>
+  </defs>
+  <rect width="192" height="192" rx="42" fill="url(#bgGrad192)"/>
+  <circle cx="108" cy="56" r="14" fill="#ffffff"/>
+  <path d="M100 76H80a8 8 0 0 0-8 8v28a24 24 0 1 0 31.2 22.8h12.8a36.8 36.8 0 1 1-44-36V84h28v24h28v-16a16 16 0 0 0-16-16z" fill="url(#wheelGrad192)"/>
+  <circle cx="136" cy="132" r="8" fill="#6ee7b7"/>
+</svg>
